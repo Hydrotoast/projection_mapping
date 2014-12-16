@@ -21,54 +21,71 @@
 #include <cassert>
 #include <cmath>
 
+/**
+ * Concurrency
+ **/
 std::atomic<bool> die(false);
-
 std::thread *freenect_thread;
+std::thread *opengl_thread;
 std::mutex back_buf_mutex;
 
+/**
+ * Freenect state
+ **/
 freenect_context *f_ctx;
 freenect_device *f_dev;
 
+/**
+ * Default video format
+ **/
 freenect_video_format video_format = FREENECT_VIDEO_RGB;
 
-// triple buffering
+/**
+ * Triple buffering where
+ * rgb_back is for freenect
+ * rgb_mid is for PCL
+ * rgb_front is for OpenGL
+ **/
 uint8_t *rgb_back, *rgb_mid, *rgb_front;
 
+/**
+ * OpenGL state
+ **/
 int window;
-int gl_argc;
-char **gl_argv;
+int WINDOW_WIDTH = 640;
+int WINDOW_HEIGHT = 480;
 
-void gl_draw() {
+void opengl_draw() {
   std::lock_guard<std::mutex> guard(back_buf_mutex);
 }
 
-void gl_resize(int width, int height) {
+void opengl_resize(int width, int height) {
   glViewport(0, 0, width, height);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  glOrtho(0, 640, 0, 480, -5.0f, 5.0f);
+  glOrtho(0, WINDOW_WIDTH, 0, WINDOW_HEIGHT, -5.0f, 5.0f);
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
 }
 
-void gl_init(int width, int height) {
+void opengl_init(int width, int height) {
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
-  gl_resize(width, height);
+  opengl_resize(width, height);
 }
 
-void gl_runner() {
-  glutInit(&gl_argc, gl_argv);
+void opengl_runner(int argc, char* argv[]) {
+  glutInit(&argc, argv);
   glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);
-  glutInitWindowSize(640, 480);
+  glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
   glutInitWindowPosition(0, 0);
 
   window = glutCreateWindow("Projection Pipeline");
 
-  glutDisplayFunc(&gl_draw);
-  glutReshapeFunc(&gl_resize);
+  glutDisplayFunc(&opengl_draw);
+  glutReshapeFunc(&opengl_resize);
 
-  gl_init(640, 480);
+  opengl_init(WINDOW_WIDTH, WINDOW_HEIGHT);
 
   glutMainLoop();
 }
@@ -77,14 +94,14 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp) {
   std::lock_guard<std::mutex> guard(back_buf_mutex);
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-  cloud->width = 640;
-  cloud->height = 480;
+  cloud->width = WINDOW_WIDTH;
+  cloud->height = WINDOW_HEIGHT;
   cloud->points.resize(cloud->width * cloud->height);
 
   uint16_t *depth = (uint16_t*) v_depth;
-  for (int col = 0; col < 640; col++) {
-    for (int row = 0; row < 480; row++) {
-      int cell = row * 480 + col;
+  for (int col = 0; col < WINDOW_WIDTH; col++) {
+    for (int row = 0; row < WINDOW_HEIGHT; row++) {
+      int cell = row * WINDOW_HEIGHT + col;
       cloud->points[cell].x = row;
       cloud->points[cell].y = col;
       cloud->points[cell].z = depth[cell];
@@ -184,12 +201,9 @@ void init_freenect() {
 }
 
 int main(int argc, char *argv[]) {
-  gl_argc = argc;
-  gl_argv = argv;
-
-  rgb_back = new uint8_t[640*400*3];
-  rgb_mid = new uint8_t[640*400*3];
-  rgb_front = new uint8_t[640*400*3];
+  rgb_back = new uint8_t[WINDOW_WIDTH*400*3];
+  rgb_mid = new uint8_t[WINDOW_WIDTH*400*3];
+  rgb_front = new uint8_t[WINDOW_WIDTH*400*3];
 
   try {
     init_freenect();
@@ -197,15 +211,16 @@ int main(int argc, char *argv[]) {
     printf(e.what());
   }
 
-  std::thread gl_thread(gl_runner);
+  opengl_thread = new std::thread(opengl_runner, argc, argv);
 
   std::this_thread::sleep_for(std::chrono::seconds(10));
   die = true;
 
   freenect_thread->join();
-  gl_thread.join();
+  opengl_thread->join();
 
   delete freenect_thread;
+  delete opengl_thread;
 
   delete[] rgb_back;
   delete[] rgb_mid;
