@@ -212,9 +212,9 @@ int main(int argc, char *argv[]) {
   cloud->height = WINDOW_HEIGHT;
   cloud->points.resize(cloud->width * cloud->height);
 
-  rgb_back = new uint8_t[WINDOW_WIDTH*400*3];
-  rgb_mid = new uint8_t[WINDOW_WIDTH*400*3];
-  rgb_front = new uint8_t[WINDOW_WIDTH*400*3];
+  rgb_back = new uint8_t[WINDOW_WIDTH * WINDOW_HEIGHT * 3];
+  rgb_mid = new uint8_t[WINDOW_WIDTH * WINDOW_HEIGHT * 3];
+  rgb_front = new uint8_t[WINDOW_WIDTH * WINDOW_HEIGHT * 3];
 
   try {
     init_freenect();
