@@ -5,10 +5,15 @@
 #include "pcl/io/pcd_io.h"
 
 int main(int argc, char *argv[]) {
-  pcl::PointCloud<pcl::PointXYZ> cube; 
-
   int side = 10 + 1; 
+
+  if (argc > 1) {
+    side = atoi(argv[1]) + 1;
+  }
+
   int size = side * side * 3;
+
+  pcl::PointCloud<pcl::PointXYZ> cube; 
   cube.width = size; 
   cube.height = 1; 
   cube.is_dense = false;
