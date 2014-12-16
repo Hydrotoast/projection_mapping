@@ -55,6 +55,11 @@ int window;
 int WINDOW_WIDTH = 640;
 int WINDOW_HEIGHT = 480;
 
+/**
+ * PCL State
+ **/
+pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
+
 void opengl_draw() {
   std::lock_guard<std::mutex> guard(back_buf_mutex);
 }
@@ -92,11 +97,6 @@ void opengl_runner(int argc, char* argv[]) {
 
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp) {
   std::lock_guard<std::mutex> guard(back_buf_mutex);
-
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-  cloud->width = WINDOW_WIDTH;
-  cloud->height = WINDOW_HEIGHT;
-  cloud->points.resize(cloud->width * cloud->height);
 
   uint16_t *depth = (uint16_t*) v_depth;
   for (int col = 0; col < WINDOW_WIDTH; col++) {
@@ -201,6 +201,11 @@ void init_freenect() {
 }
 
 int main(int argc, char *argv[]) {
+  cloud = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
+  cloud->width = WINDOW_WIDTH;
+  cloud->height = WINDOW_HEIGHT;
+  cloud->points.resize(cloud->width * cloud->height);
+
   rgb_back = new uint8_t[WINDOW_WIDTH*400*3];
   rgb_mid = new uint8_t[WINDOW_WIDTH*400*3];
   rgb_front = new uint8_t[WINDOW_WIDTH*400*3];
