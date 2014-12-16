@@ -63,7 +63,7 @@ int WINDOW_HEIGHT = 480;
 pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
 
 void opengl_draw() {
-  // std::lock_guard<std::mutex> guard(back_buf_mutex);
+  std::lock_guard<std::mutex> guard(back_buf_mutex);
 }
 
 void opengl_resize(int width, int height) {
@@ -101,12 +101,17 @@ void opengl_runner(int argc, char* argv[]) {
 }
 
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp) {
-  std::lock_guard<std::mutex> guard(back_buf_mutex);
+  back_buf_mutex.lock();
+
   assert(depth_back == v_depth);
 
+  // Copy depth buffer into point cloud
   depth_back = depth_front;
   freenect_set_depth_buffer(f_dev, depth_back);
   depth_front = (uint16_t*) v_depth;
+
+  back_buf_mutex.unlock();
+
   for (int col = 0; col < WINDOW_WIDTH; col++) {
     for (int row = 0; row < WINDOW_HEIGHT; row++) {
       int cell = row * WINDOW_HEIGHT + col;
@@ -116,6 +121,7 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp) {
     }
   }
 
+  // Perform plane segmentation and time it
   auto start = std::chrono::high_resolution_clock::now();
 
   pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
@@ -156,17 +162,21 @@ void video_cb(freenect_device *dev, void *rgb, uint32_t timestamp) {
  * Executes the freenect pipeline
  **/
 void freenect_runner() {
+  // Setup callbacks
   freenect_set_depth_callback(f_dev, depth_cb);
   freenect_set_video_callback(f_dev, video_cb);
 
+  // Setup modes (determines buffer parameters) and attach buffers
   freenect_set_depth_mode(f_dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
   freenect_set_depth_buffer(f_dev, depth_back);
   freenect_set_video_mode(f_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, video_format));
   freenect_set_video_buffer(f_dev, rgb_back);
 
+  // Start streaming
   freenect_start_depth(f_dev);
   freenect_start_video(f_dev);
 
+  // Process events synchronously?
   while (!die && freenect_process_events(f_ctx) >= 0) {
     fflush(stdout);
   }
@@ -176,6 +186,7 @@ void freenect_runner() {
   freenect_stop_video(f_dev);
   freenect_stop_depth(f_dev);
 
+  // Cleanup resources
   freenect_close_device(f_dev);
   freenect_shutdown(f_ctx);
 }
@@ -210,17 +221,22 @@ void init_freenect() {
 }
 
 int main(int argc, char *argv[]) {
+  // Allocate cloud
   cloud = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
   cloud->width = WINDOW_WIDTH;
   cloud->height = WINDOW_HEIGHT;
   cloud->points.resize(cloud->width * cloud->height);
 
+  // Allocate depth buffers
   depth_back = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
   depth_front = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
+
+  // Allocate RGB buffers
   rgb_back = new uint8_t[WINDOW_WIDTH * WINDOW_HEIGHT];
   rgb_mid = new uint8_t[WINDOW_WIDTH * WINDOW_HEIGHT];
   rgb_front = new uint8_t[WINDOW_WIDTH * WINDOW_HEIGHT];
 
+  // Several errors can arise from this
   try {
     init_freenect();
   } catch (const std::runtime_error& e) {
@@ -228,13 +244,16 @@ int main(int argc, char *argv[]) {
   }
 
   std::thread freenect_thread(freenect_runner);
-  /* std::thread opengl_thread(opengl_runner, argc, argv); */
+  std::thread opengl_thread(opengl_runner, argc, argv);
 
   freenect_thread.join();
-  /* opengl_thread.join(); */
+  opengl_thread.join();
 
-  // std::this_thread::sleep_for(std::chrono::seconds(10));
+  // std::this_thread::sleep_for(std::chrono::seconds(120));
   // die = true;
+  
+  delete[] depth_back;
+  delete[] depth_front;
 
   delete[] rgb_back;
   delete[] rgb_mid;
