@@ -79,6 +79,9 @@ void opengl_init(int width, int height) {
   opengl_resize(width, height);
 }
 
+/**
+ * Executes the OpenGL thread
+ **/
 void opengl_runner(int argc, char* argv[]) {
   glutInit(&argc, argv);
   glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);
@@ -144,6 +147,9 @@ void video_cb(freenect_device *dev, void *rgb, uint32_t timestamp) {
   rgb_mid = (uint8_t*) rgb;
 }
 
+/**
+ * Executes the freenect pipeline
+ **/
 void freenect_runner() {
   freenect_set_depth_callback(f_dev, depth_cb);
   freenect_set_video_callback(f_dev, video_cb);
@@ -169,7 +175,7 @@ void freenect_runner() {
 
 /**
  * Initializes the freenect_context and the freenect_device.
- */
+ **/
 void init_freenect() {
   if (freenect_init(&f_ctx, NULL) < 0) {
     throw std::runtime_error("freenect_init() failed");
