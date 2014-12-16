@@ -20,14 +20,18 @@ int main(int argc, char *argv[]) {
   cube.points.resize(size);
 
   int p = 0; 
+  
+  // Front face
   for (size_t x = 0; x < side; x++) 
     for (size_t y = 0; y < side; y++) 
       cube.points[p++].getVector3fMap() = Eigen::Vector3f(x, y, 0); 
 
+  // Top face
   for (size_t x = 0; x < side; x++) 
     for (size_t z = 0; z < side; z++) 
       cube.points[p++].getVector3fMap() = Eigen::Vector3f(x, side - 1, z); 
 
+  // Side face
   for (size_t y = 0; y < side; y++) 
     for (size_t z = 0; z < side; z++) 
       cube.points[p++].getVector3fMap() = Eigen::Vector3f(side - 1, y, z); 
