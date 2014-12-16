@@ -22,6 +22,9 @@ endif()
 
 include(FindPkgConfig)
 
+find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIR})
+
 set(EXTERNAL_LIB_DIR "${PROJECT_SOURCE_DIR}/lib")
 
 include_directories("${EXTERNAL_LIB_DIR}/libusb/include/libusb-1.0")
@@ -74,3 +77,6 @@ add_definitions(
 
 add_executable(projection_mapping src/main.cpp)
 target_link_libraries(projection_mapping ${LIBRARIES})
+
+add_executable(cube_generator src/cube_generator.cpp)
+target_link_libraries(cube_generator ${LIBRARIES})
