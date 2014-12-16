@@ -1,0 +1,26 @@
+# Project directories
+.idea
+.clang_complete
+
+# Build directories
+bin
+build
+doc
+
+# Libraries
+lib/eigen
+lib/eigen_src
+
+lib/glew
+lib/glew_src
+
+lib/glfw_src
+
+lib/libfreenect
+lib/libfreenect_src
+
+lib/libusb
+lib/libusb_src
+
+lib/pcl
+lib/pcl_src
