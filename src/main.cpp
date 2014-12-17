@@ -32,8 +32,6 @@
  **/
 std::atomic<bool> die(false);
 
-std::mutex rgb_back_buf_mutex;
-
 /**
  * Freenect state
  **/
