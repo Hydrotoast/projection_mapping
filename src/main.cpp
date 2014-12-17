@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -28,7 +29,18 @@
  * Concurrency
  **/
 std::atomic<bool> die(false);
-std::mutex back_buf_mutex;
+bool opengl_back_buf_available = false;
+bool pcl_back_buf_available = false;
+
+std::mutex opengl_back_buf_mutex;
+std::unique_lock<std::mutex> opengl_back_buf_lock;
+std::condition_variable opengl_back_buf_updated;
+
+std::mutex pcl_back_buf_mutex;
+std::unique_lock<std::mutex> pcl_back_buf_lock;
+std::condition_variable pcl_back_buf_updated;
+
+std::mutex rgb_back_buf_mutex;
 
 /**
  * Freenect state
@@ -47,7 +59,7 @@ freenect_video_format video_format = FREENECT_VIDEO_IR_8BIT;
  * rgb_mid is for PCL
  * rgb_front is for OpenGL
  **/
-uint16_t *depth_back, *depth_front;
+uint16_t *pcl_back, *pcl_front;
 uint8_t *rgb_back, *rgb_mid, *rgb_front;
 
 /**
@@ -62,9 +74,7 @@ int WINDOW_HEIGHT = 480;
  **/
 pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
 
-void opengl_draw() {
-  std::lock_guard<std::mutex> guard(back_buf_mutex);
-}
+void opengl_draw() { }
 
 void opengl_resize(int width, int height) {
   glViewport(0, 0, width, height);
@@ -100,62 +110,69 @@ void opengl_runner(int argc, char* argv[]) {
   glutMainLoop();
 }
 
-void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp) {
-  back_buf_mutex.lock();
+void pcl_runner() {
+  while (true) {
+    std::unique_lock<std::mutex> pcl_lock(pcl_back_buf_mutex);
+    pcl_back_buf_updated.wait(pcl_lock, [] { return pcl_back_buf_available; });
 
-  assert(depth_back == v_depth);
+    pcl_back_buf_available = false;
 
-  // Copy depth buffer into point cloud
-  depth_back = depth_front;
-  freenect_set_depth_buffer(f_dev, depth_back);
-  depth_front = (uint16_t*) v_depth;
+    // Copy depth buffer into point cloud
+    std::swap(pcl_back, pcl_front);
+    freenect_set_depth_buffer(f_dev, pcl_back);
 
-  back_buf_mutex.unlock();
+    pcl_lock.unlock();
 
-  for (int col = 0; col < WINDOW_WIDTH; col++) {
-    for (int row = 0; row < WINDOW_HEIGHT; row++) {
-      int cell = row * WINDOW_HEIGHT + col;
-      cloud->points[cell].x = row;
-      cloud->points[cell].y = col;
-      cloud->points[cell].z = depth_front[cell];
+    for (int col = 0; col < WINDOW_WIDTH; col++) {
+      for (int row = 0; row < WINDOW_HEIGHT; row++) {
+        int cell = row * WINDOW_HEIGHT + col;
+        cloud->points[cell].x = row;
+        cloud->points[cell].y = col;
+        cloud->points[cell].z = pcl_front[cell];
+      }
     }
-  }
 
-  // Perform plane segmentation and time it
-  auto start = std::chrono::high_resolution_clock::now();
+    // Perform plane segmentation and time it
+    auto start = std::chrono::high_resolution_clock::now();
 
-  pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
-  pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
 
-  pcl::SACSegmentation<pcl::PointXYZ> seg;
-  seg.setOptimizeCoefficients(true);
-  seg.setModelType(pcl::SACMODEL_PLANE);
-  seg.setMethodType(pcl::SAC_RANSAC);
-  seg.setMaxIterations(25);
-  seg.setDistanceThreshold(0.01);
+    pcl::SACSegmentation<pcl::PointXYZ> seg;
+    seg.setOptimizeCoefficients(true);
+    seg.setModelType(pcl::SACMODEL_PLANE);
+    seg.setMethodType(pcl::SAC_RANSAC);
+    seg.setMaxIterations(25);
+    seg.setDistanceThreshold(0.01);
 
-  seg.setInputCloud(cloud);
-  seg.segment(*inliers, *coefficients);
+    seg.setInputCloud(cloud);
+    seg.segment(*inliers, *coefficients);
 
-  auto end = std::chrono::high_resolution_clock::now();
+    auto end = std::chrono::high_resolution_clock::now();
 
-  if (inliers->indices.size() == 0) {
-    printf("No planes found!\n");
-  } else {
-    printf("Model coefficients: %.2f, %.2f, %.2f, %.2f (%.2f ms)\n", 
-        coefficients->values[0],
-        coefficients->values[1],
-        coefficients->values[2],
-        coefficients->values[3],
-        std::chrono::duration<double, std::milli>(end - start).count());
+    if (inliers->indices.size() == 0) {
+      printf("No planes found!\n");
+    } else {
+      printf("Model coefficients: %.2f, %.2f, %.2f, %.2f (%.2f ms)\n", 
+          coefficients->values[0],
+          coefficients->values[1],
+          coefficients->values[2],
+          coefficients->values[3],
+          std::chrono::duration<double, std::milli>(end - start).count());
+    }
   }
 }
 
+void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp) {
+  assert(pcl_back == v_depth);
+  pcl_back_buf_available = true;
+  pcl_back_buf_updated.notify_one();
+}
+
 void video_cb(freenect_device *dev, void *rgb, uint32_t timestamp) {
-  std::lock_guard<std::mutex> guard(back_buf_mutex);
-  rgb_back = rgb_mid;
+  std::lock_guard<std::mutex> guard(rgb_back_buf_mutex);
+  std::swap(rgb_back, rgb_mid);
   freenect_set_video_buffer(f_dev, rgb_back);
-  rgb_mid = (uint8_t*) rgb;
 }
 
 /**
@@ -168,7 +185,7 @@ void freenect_runner() {
 
   // Setup modes (determines buffer parameters) and attach buffers
   freenect_set_depth_mode(f_dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
-  freenect_set_depth_buffer(f_dev, depth_back);
+  freenect_set_depth_buffer(f_dev, pcl_back);
   freenect_set_video_mode(f_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, video_format));
   freenect_set_video_buffer(f_dev, rgb_back);
 
@@ -228,8 +245,8 @@ int main(int argc, char *argv[]) {
   cloud->points.resize(cloud->width * cloud->height);
 
   // Allocate depth buffers
-  depth_back = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
-  depth_front = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
+  pcl_back = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
+  pcl_front = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
 
   // Allocate RGB buffers
   rgb_back = new uint8_t[WINDOW_WIDTH * WINDOW_HEIGHT];
@@ -244,16 +261,18 @@ int main(int argc, char *argv[]) {
   }
 
   std::thread freenect_thread(freenect_runner);
+  std::thread pcl_thread(pcl_runner);
   std::thread opengl_thread(opengl_runner, argc, argv);
 
   freenect_thread.join();
   opengl_thread.join();
+  pcl_thread.join();
 
   // std::this_thread::sleep_for(std::chrono::seconds(120));
   // die = true;
   
-  delete[] depth_back;
-  delete[] depth_front;
+  delete[] pcl_back;
+  delete[] pcl_front;
 
   delete[] rgb_back;
   delete[] rgb_mid;
