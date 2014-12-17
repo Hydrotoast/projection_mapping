@@ -111,7 +111,7 @@ void opengl_runner(int argc, char* argv[]) {
 void pcl_runner() {
   while (true) {
     // Copy depth buffer into point cloud
-    pcl_back->write_to(pcl_front);
+    *pcl_back >> pcl_front;
 
     for (int col = 0; col < WINDOW_WIDTH; col++) {
       for (int row = 0; row < WINDOW_HEIGHT; row++) {
@@ -155,7 +155,7 @@ void pcl_runner() {
 
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp) {
   assert(freenect_buffer == v_depth);
-  pcl_back->read_from(freenect_buffer);
+  *pcl_back << freenect_buffer;
   freenect_set_depth_buffer(f_dev, freenect_buffer);
 }
 

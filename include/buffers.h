@@ -27,8 +27,8 @@ namespace buffers {
 
     // Blocking IO
 
-    void write_to(T *&buffer);
-    void read_from(T *&buffer);
+    SharedBuffer<T>& write_to(T *&buffer);
+    SharedBuffer<T>& read_from(T *&buffer);
   private:
     int width_;
     int height_;
@@ -60,23 +60,35 @@ namespace buffers {
   bool SharedBuffer<T>::is_ready() const { return is_ready_; }
 
   template <typename T>
-  void SharedBuffer<T>::write_to(T *&buffer) {
+  SharedBuffer<T>& SharedBuffer<T>::write_to(T *&buffer) {
     std::unique_lock<std::mutex> lock(mutex_);
     ready_condition_.wait(lock, [this] { return this->is_ready_ == true; });
 
     std::swap(buffer_, buffer);
 
     is_ready_ = false;
+    return *this;
   }
 
   template <typename T>
-  void SharedBuffer<T>::read_from(T *&buffer) {
+  SharedBuffer<T>& SharedBuffer<T>::read_from(T *&buffer) {
     std::lock_guard<std::mutex> guard(mutex_);
 
     std::swap(buffer_, buffer);
 
     is_ready_ = true;
     ready_condition_.notify_one();
+    return *this;
+  }
+
+  template <typename T>
+  SharedBuffer<T>& operator>>(SharedBuffer<T>& lhs, T *&rhs) {
+    return lhs.write_to(rhs);
+  }
+
+  template <typename T>
+  SharedBuffer<T>& operator<<(SharedBuffer<T>& lhs, T *&rhs) {
+    return lhs.read_from(rhs);
   }
 }
 
