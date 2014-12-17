@@ -253,10 +253,10 @@ int main(int argc, char *argv[]) {
 
   std::thread freenect_thread(freenect_runner);
   std::thread pcl_thread(pcl_runner);
-  std::thread opengl_thread(opengl_runner, argc, argv);
+
+  opengl_runner(argc, argv);
 
   freenect_thread.join();
-  opengl_thread.join();
   pcl_thread.join();
 
   // std::this_thread::sleep_for(std::chrono::seconds(120));
