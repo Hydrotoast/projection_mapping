@@ -1,6 +1,8 @@
 #ifndef BUFFERS_H
 #define BUFFERS_H
 
+#include <cassert>
+
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -76,6 +78,8 @@ namespace buffers {
 
   template <typename T>
   SharedBuffer<T>& SharedBuffer<T>::write_to(T *&buffer) {
+    assert(buffer != nullptr);
+
     std::unique_lock<std::mutex> lock(mutex_);
     ready_condition_.wait(lock, [this] { return this->is_ready_ == true; });
 
@@ -87,6 +91,8 @@ namespace buffers {
 
   template <typename T>
   SharedBuffer<T>& SharedBuffer<T>::read_from(T *&buffer) {
+    assert(buffer != nullptr);
+
     std::lock_guard<std::mutex> guard(mutex_);
 
     std::swap(buffer_, buffer);
@@ -127,11 +133,13 @@ namespace buffers {
 
   template <typename T>
   SharedBuffer<T>& operator>>(SharedBuffer<T> &lhs, T *&rhs) {
+    assert(rhs != nullptr);
     return lhs.write_to(rhs);
   }
 
   template <typename T>
   SharedBuffer<T>& operator<<(SharedBuffer<T> &lhs, T *&rhs) {
+    assert(rhs != nullptr);
     return lhs.read_from(rhs);
   }
 
