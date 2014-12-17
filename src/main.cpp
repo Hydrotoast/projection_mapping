@@ -31,11 +31,6 @@
  * Concurrency
  **/
 std::atomic<bool> die(false);
-bool opengl_back_buf_available = false;
-
-std::mutex opengl_back_buf_mutex;
-std::unique_lock<std::mutex> opengl_back_buf_lock;
-std::condition_variable opengl_back_buf_updated;
 
 std::mutex rgb_back_buf_mutex;
 
@@ -56,9 +51,11 @@ freenect_video_format video_format = FREENECT_VIDEO_IR_8BIT;
  * rgb_mid is for PCL
  * rgb_front is for OpenGL
  **/
-buffers::SharedBuffer<> *pcl_back;
-uint16_t *freenect_buffer, *pcl_front;
-uint8_t *rgb_back, *rgb_mid, *rgb_front;
+buffers::SharedBuffer<uint16_t> *pcl_back;
+uint16_t *freenect_depth_buffer, *pcl_front;
+
+buffers::SharedBuffer<uint8_t> *rgb_back;
+uint8_t *freenect_rgb_buffer, *rgb_front;
 
 /**
  * OpenGL state
@@ -154,15 +151,15 @@ void pcl_runner() {
 }
 
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp) {
-  assert(freenect_buffer == v_depth);
-  *pcl_back << freenect_buffer;
-  freenect_set_depth_buffer(f_dev, freenect_buffer);
+  assert(freenect_depth_buffer == v_depth);
+  *pcl_back << freenect_depth_buffer;
+  freenect_set_depth_buffer(f_dev, freenect_depth_buffer);
 }
 
 void video_cb(freenect_device *dev, void *rgb, uint32_t timestamp) {
-  std::lock_guard<std::mutex> guard(rgb_back_buf_mutex);
-  std::swap(rgb_back, rgb_mid);
-  freenect_set_video_buffer(f_dev, rgb_back);
+  assert(freenect_rgb_buffer == rgb);
+  *rgb_back << freenect_rgb_buffer;
+  freenect_set_video_buffer(f_dev, freenect_rgb_buffer);
 }
 
 /**
@@ -175,9 +172,9 @@ void freenect_runner() {
 
   // Setup modes (determines buffer parameters) and attach buffers
   freenect_set_depth_mode(f_dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
-  freenect_set_depth_buffer(f_dev, freenect_buffer);
+  freenect_set_depth_buffer(f_dev, freenect_depth_buffer);
   freenect_set_video_mode(f_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, video_format));
-  freenect_set_video_buffer(f_dev, rgb_back);
+  freenect_set_video_buffer(f_dev, freenect_rgb_buffer);
 
   // Start streaming
   freenect_start_depth(f_dev);
@@ -235,13 +232,13 @@ int main(int argc, char *argv[]) {
   cloud->points.resize(cloud->width * cloud->height);
 
   // Allocate depth buffers
+  freenect_depth_buffer = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
   pcl_back = new buffers::SharedBuffer<uint16_t>(WINDOW_WIDTH, WINDOW_HEIGHT);
-  freenect_buffer = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
   pcl_front = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
 
   // Allocate RGB buffers
-  rgb_back = new uint8_t[WINDOW_WIDTH * WINDOW_HEIGHT];
-  rgb_mid = new uint8_t[WINDOW_WIDTH * WINDOW_HEIGHT];
+  freenect_rgb_buffer = new uint8_t[WINDOW_WIDTH * WINDOW_HEIGHT];
+  rgb_back = new buffers::SharedBuffer<uint8_t>(WINDOW_WIDTH, WINDOW_HEIGHT);
   rgb_front = new uint8_t[WINDOW_WIDTH * WINDOW_HEIGHT];
 
   // Several errors can arise from this
@@ -262,10 +259,9 @@ int main(int argc, char *argv[]) {
   // std::this_thread::sleep_for(std::chrono::seconds(120));
   // die = true;
   
-  delete [] freenect_buffer;
-  delete [] pcl_front;
+  delete [] freenect_depth_buffer;
+  delete [] freenect_rgb_buffer;
 
-  delete [] rgb_back;
-  delete [] rgb_mid;
+  delete [] pcl_front;
   delete [] rgb_front;
 }
