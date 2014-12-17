@@ -1,8 +1,9 @@
 #ifndef BUFFERS_H
 #define BUFFERS_H
 
-#include <mutex>
+#include <chrono>
 #include <condition_variable>
+#include <mutex>
 
 namespace buffers {
   // Shared buffers can be read from or written to by swapping the internal
@@ -29,6 +30,11 @@ namespace buffers {
 
     SharedBuffer<T>& write_to(T *&buffer);
     SharedBuffer<T>& read_from(T *&buffer);
+
+    // Isomorphic IO
+
+    SharedBuffer<T>& write_to(SharedBuffer<T> &buffer);
+    SharedBuffer<T>& read_from(SharedBuffer<T> &buffer);
   private:
     int width_;
     int height_;
@@ -82,12 +88,51 @@ namespace buffers {
   }
 
   template <typename T>
-  SharedBuffer<T>& operator>>(SharedBuffer<T>& lhs, T *&rhs) {
+  SharedBuffer<T>& SharedBuffer<T>::write_to(SharedBuffer<T> &buffer) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    ready_condition_.wait_for(lock, std::chrono::seconds(1), 
+        [this] { return this->is_ready_ == true; });
+    std::lock_guard<std::mutex> guard(buffer.mutex_);
+
+    std::swap(buffer_, buffer.buffer_);
+
+    is_ready_ = false;
+    buffer.is_ready_ = true;
+    return *this;
+  }
+
+  template <typename T>
+  SharedBuffer<T>& SharedBuffer<T>::read_from(SharedBuffer<T> &buffer) {
+    std::lock_guard<std::mutex> guard(mutex_);
+    std::unique_lock<std::mutex> lock(buffer.mutex_);
+    buffer.ready_condition_.wait(lock, std::chrono::seconds(1), 
+        [buffer] { return buffer.is_ready_ == true; });
+
+    std::swap(buffer_, buffer.buffer_);
+
+    buffer.is_ready_ = false;
+    is_ready_ = true;
+    ready_condition_.notify_one();
+    return *this;
+  }
+
+  template <typename T>
+  SharedBuffer<T>& operator>>(SharedBuffer<T> &lhs, T *&rhs) {
     return lhs.write_to(rhs);
   }
 
   template <typename T>
-  SharedBuffer<T>& operator<<(SharedBuffer<T>& lhs, T *&rhs) {
+  SharedBuffer<T>& operator<<(SharedBuffer<T> &lhs, T *&rhs) {
+    return lhs.read_from(rhs);
+  }
+
+  template <typename T>
+  SharedBuffer<T>& operator>>(SharedBuffer<T> &lhs, SharedBuffer<T> &rhs) {
+    return lhs.write_to(rhs);
+  }
+
+  template <typename T>
+  SharedBuffer<T>& operator<<(SharedBuffer<T> &lhs, SharedBuffer<T> &rhs) {
     return lhs.read_from(rhs);
   }
 }
