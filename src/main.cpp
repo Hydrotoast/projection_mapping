@@ -1,3 +1,5 @@
+#include "buffers.h"
+
 #include "libfreenect.h"
 
 #include "pcl/common/projection_matrix.h"
@@ -30,15 +32,10 @@
  **/
 std::atomic<bool> die(false);
 bool opengl_back_buf_available = false;
-bool pcl_back_buf_available = false;
 
 std::mutex opengl_back_buf_mutex;
 std::unique_lock<std::mutex> opengl_back_buf_lock;
 std::condition_variable opengl_back_buf_updated;
-
-std::mutex pcl_back_buf_mutex;
-std::unique_lock<std::mutex> pcl_back_buf_lock;
-std::condition_variable pcl_back_buf_updated;
 
 std::mutex rgb_back_buf_mutex;
 
@@ -59,7 +56,8 @@ freenect_video_format video_format = FREENECT_VIDEO_IR_8BIT;
  * rgb_mid is for PCL
  * rgb_front is for OpenGL
  **/
-uint16_t *pcl_back, *pcl_front;
+buffers::SharedBuffer<> *pcl_back;
+uint16_t *freenect_buffer, *pcl_front;
 uint8_t *rgb_back, *rgb_mid, *rgb_front;
 
 /**
@@ -112,16 +110,8 @@ void opengl_runner(int argc, char* argv[]) {
 
 void pcl_runner() {
   while (true) {
-    std::unique_lock<std::mutex> pcl_lock(pcl_back_buf_mutex);
-    pcl_back_buf_updated.wait(pcl_lock, [] { return pcl_back_buf_available; });
-
-    pcl_back_buf_available = false;
-
     // Copy depth buffer into point cloud
-    std::swap(pcl_back, pcl_front);
-    freenect_set_depth_buffer(f_dev, pcl_back);
-
-    pcl_lock.unlock();
+    pcl_back->write_to(pcl_front);
 
     for (int col = 0; col < WINDOW_WIDTH; col++) {
       for (int row = 0; row < WINDOW_HEIGHT; row++) {
@@ -164,9 +154,9 @@ void pcl_runner() {
 }
 
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp) {
-  assert(pcl_back == v_depth);
-  pcl_back_buf_available = true;
-  pcl_back_buf_updated.notify_one();
+  assert(freenect_buffer == v_depth);
+  pcl_back->read_from(freenect_buffer);
+  freenect_set_depth_buffer(f_dev, freenect_buffer);
 }
 
 void video_cb(freenect_device *dev, void *rgb, uint32_t timestamp) {
@@ -185,7 +175,7 @@ void freenect_runner() {
 
   // Setup modes (determines buffer parameters) and attach buffers
   freenect_set_depth_mode(f_dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
-  freenect_set_depth_buffer(f_dev, pcl_back);
+  freenect_set_depth_buffer(f_dev, freenect_buffer);
   freenect_set_video_mode(f_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, video_format));
   freenect_set_video_buffer(f_dev, rgb_back);
 
@@ -245,7 +235,8 @@ int main(int argc, char *argv[]) {
   cloud->points.resize(cloud->width * cloud->height);
 
   // Allocate depth buffers
-  pcl_back = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
+  pcl_back = new buffers::SharedBuffer<uint16_t>(WINDOW_WIDTH, WINDOW_HEIGHT);
+  freenect_buffer = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
   pcl_front = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
 
   // Allocate RGB buffers
@@ -271,10 +262,10 @@ int main(int argc, char *argv[]) {
   // std::this_thread::sleep_for(std::chrono::seconds(120));
   // die = true;
   
-  delete[] pcl_back;
-  delete[] pcl_front;
+  delete [] freenect_buffer;
+  delete [] pcl_front;
 
-  delete[] rgb_back;
-  delete[] rgb_mid;
-  delete[] rgb_front;
+  delete [] rgb_back;
+  delete [] rgb_mid;
+  delete [] rgb_front;
 }

@@ -72,9 +72,8 @@ set(LIBRARIES
   ${VTK_LIBRARIES}
   pthread)
 
-add_definitions(
-  -std=c++11)
-
+include_directories("include")
+add_definitions(-std=c++11) 
 add_executable(projection_mapping src/main.cpp)
 target_link_libraries(projection_mapping ${LIBRARIES})
 
