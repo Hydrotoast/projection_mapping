@@ -20,6 +20,10 @@ namespace buffers {
     SharedBuffer(SharedBuffer&& buffer) = delete;
     SharedBuffer& operator=(SharedBuffer&& buffer) = delete;
 
+    // Element access
+
+    const T& operator[](const size_t index) const;
+
     // Accessors
 
     size_t width() const;
@@ -54,6 +58,11 @@ namespace buffers {
   template <typename T>
   SharedBuffer<T>::~SharedBuffer() {
     delete [] buffer_;
+  }
+
+  template <typename T>
+  const T& SharedBuffer<T>::operator[](const size_t index) const {
+    return buffer_[index];
   }
 
   template <typename T>
