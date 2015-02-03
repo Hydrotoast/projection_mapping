@@ -3,16 +3,6 @@
 cd `dirname $0`
 LIBS_DIR=`pwd`
 
-# eigen3
-wget -O eigen-3.2.2.tar.bz2 http://bitbucket.org/eigen/eigen/get/3.2.2.tar.bz2
-tar xf eigen-3.2.2.tar.bz2
-rm eigen-3.2.2.tar.bz2
-cd eigen*
-
-mkdir build && cd build
-cmake -DCMAKE_INSTALL_PREFIX=$LIBS_DIR/eigen ..
-make -j8 && make install
-
 # pcl
 PCL_SOURCE_DIR=$LIBS_DIR/pcl_src
 PCL_INSTALL_DIR=$LIBS_DIR/pcl

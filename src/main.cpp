@@ -67,7 +67,9 @@ int WINDOW_HEIGHT = 480;
  **/
 pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
 
-void opengl_draw() { }
+void opengl_draw() {
+  
+}
 
 void opengl_resize(int width, int height) {
   glViewport(0, 0, width, height);
@@ -127,7 +129,7 @@ void pcl_runner() {
     seg.setOptimizeCoefficients(true);
     seg.setModelType(pcl::SACMODEL_PLANE);
     seg.setMethodType(pcl::SAC_RANSAC);
-    seg.setMaxIterations(25);
+    seg.setMaxIterations(100);
     seg.setDistanceThreshold(0.01);
 
     seg.setInputCloud(cloud);

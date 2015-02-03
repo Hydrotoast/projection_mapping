@@ -5,8 +5,6 @@ project(projection_mapping)
 list(APPEND CMAKE_MODULE_PATH
   "${PROJECT_SOURCE_DIR}/cmake"
   "${PROJECT_SOURCE_DIR}/lib/pcl/share/pcl-1.8")
-list(APPEND CMAKE_PREFIX_PATH
-  "${PROJECT_SOURCE_DIR}/lib/libfreenect/share/libfreenect")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
@@ -27,8 +25,12 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 
 set(EXTERNAL_LIB_DIR "${PROJECT_SOURCE_DIR}/lib")
 
-include_directories("${EXTERNAL_LIB_DIR}/libusb/include/libusb-1.0")
-link_directories("${EXTERNAL_LIB_DIR}/libusb/lib")
+pkg_check_modules(USB libusb-1.0>=1.0.0)
+include_directories(${USB_INCLUDE_DIRS})
+link_directories(${USB_LIBRARIY_DIRS})
+
+# include_directories("${EXTERNAL_LIB_DIR}/libusb/include/libusb-1.0")
+# link_directories("${EXTERNAL_LIB_DIR}/libusb/lib")
 
 find_package(libfreenect REQUIRED NO_MODULE)
 include_directories(${FREENECT_INCLUDE_DIRS})
@@ -65,6 +67,7 @@ message("${FREENECT_INCLUDE_DIRS}")
 set(LIBRARIES
   ${Boost_LIBRARIES}
   ${PCL_LIBRARIES}
+  ${USB_LIBRARIES}
   ${FREENECT_LIBRARIES}
   ${OPENGL_LIBRARIES}
   ${GLU_LIBRARIES}
