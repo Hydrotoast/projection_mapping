@@ -21,3 +21,8 @@ OpenGL stack:
 
 - gl1-mesa
 - freeglut3
+
+Benchmarks
+----------
+
+Plane Segmentation with RANSAC in PCL: 44ms

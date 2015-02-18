@@ -41,7 +41,7 @@ link_directories("${EXTERNAL_LIB_DIR}/eigen/lib")
 
 include_directories("${EXTERNAL_LIB_DIR}/pcl/include/pcl-1.8")
 link_directories("${EXTERNAL_LIB_DIR}/pcl/lib")
-set(PCL_LIBRARIES "pcl_common" "pcl_io" "pcl_segmentation" "pcl_visualization")
+set(PCL_LIBRARIES "pcl_common" "pcl_io" "pcl_segmentation" "pcl_visualization" "pcl_sample_consensus")
 
 # Use VTK
 find_package(VTK REQUIRED)
@@ -60,7 +60,7 @@ include_directories(${OPENGL_INCLUDE_DIRS} ${GLU_INCLUDE_DIRS} ${GLUT_INCLUDE_DI
 link_directories(${OPENGL_LIBRARY_DIRS} ${GLU_LIBRARY_DIRS} ${GLUT_LIBRARY_DIRS})
 add_definitions(${OPENGL_DEFINITIONS} ${GLU_DEFINITIONS} ${GLUT_DEFINITIONS})
 
-find_package(Boost COMPONENTS system)
+find_package(Boost COMPONENTS system thread)
 include_directories(${Boost_INCLUDE_DIRS})
 message("${FREENECT_INCLUDE_DIRS}")
 
@@ -82,3 +82,6 @@ target_link_libraries(projection_mapping ${LIBRARIES})
 
 add_executable(cube_generator src/cube_generator.cpp)
 target_link_libraries(cube_generator ${LIBRARIES})
+
+add_executable(ransac src/ransac.cpp)
+target_link_libraries(ransac ${LIBRARIES})
