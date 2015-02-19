@@ -85,3 +85,6 @@ target_link_libraries(cube_generator ${LIBRARIES})
 
 add_executable(ransac src/ransac.cpp)
 target_link_libraries(ransac ${LIBRARIES})
+
+add_executable(ransac_cube src/ransac_cube.cpp)
+target_link_libraries(ransac_cube ${LIBRARIES})
