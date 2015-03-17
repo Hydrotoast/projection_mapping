@@ -7,6 +7,7 @@ list(APPEND CMAKE_MODULE_PATH
   "${PROJECT_SOURCE_DIR}/lib/pcl/share/pcl-1.8")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+set(CMAKE_BUILD_TYPE Debug)
 
 option(DISABLE_SENSOR_PIPELINE "Disables the sensor pipeline" OFF)
 option(DISABLE_PROJECTION_PIPELINE "Disables the projection pipeline" OFF)
@@ -41,7 +42,14 @@ link_directories("${EXTERNAL_LIB_DIR}/eigen/lib")
 
 include_directories("${EXTERNAL_LIB_DIR}/pcl/include/pcl-1.8")
 link_directories("${EXTERNAL_LIB_DIR}/pcl/lib")
-set(PCL_LIBRARIES "pcl_common" "pcl_io" "pcl_segmentation" "pcl_visualization" "pcl_sample_consensus")
+set(PCL_LIBRARIES 
+  "pcl_common" 
+  "pcl_search" 
+  "pcl_io" 
+  "pcl_segmentation" 
+  "pcl_visualization" 
+  "pcl_sample_consensus" 
+  "pcl_features")
 
 # Use VTK
 find_package(VTK REQUIRED)
@@ -73,6 +81,7 @@ set(LIBRARIES
   ${GLU_LIBRARIES}
   ${GLUT_LIBRARIES}
   ${VTK_LIBRARIES}
+  m
   pthread)
 
 include_directories("include")
@@ -88,3 +97,6 @@ target_link_libraries(ransac ${LIBRARIES})
 
 add_executable(ransac_cube src/ransac_cube.cpp)
 target_link_libraries(ransac_cube ${LIBRARIES})
+
+add_executable(reconstruct_cube src/reconstruct_cube.cpp)
+target_link_libraries(reconstruct_cube ${LIBRARIES})
