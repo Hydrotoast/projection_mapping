@@ -98,5 +98,5 @@ target_link_libraries(ransac ${LIBRARIES})
 add_executable(ransac_cube src/ransac_cube.cpp)
 target_link_libraries(ransac_cube ${LIBRARIES})
 
-add_executable(reconstruct_cube src/reconstruct_cube.cpp)
-target_link_libraries(reconstruct_cube ${LIBRARIES})
+#add_executable(reconstruct_cube src/reconstruct_cube.cpp)
+#target_link_libraries(reconstruct_cube ${LIBRARIES})
