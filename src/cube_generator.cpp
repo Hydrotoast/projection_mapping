@@ -73,7 +73,6 @@ void MakeDense(pcl::PointCloud<pcl::PointXYZ> &dense_cloud,
   for (auto point : cloud)
   {
     assert(lround(point.y) * height + lround(point.x) >= 0);
-    std::cout << point.z << std::endl;
     float x_round = lround(point.x), y_round = lround(point.y);
 
     auto current_point = dense_cloud.points[x_round * width + y_round].getVector3fMap();
@@ -105,10 +104,16 @@ int main(int argc, char *argv[]) {
   pcl::PointCloud<pcl::PointXYZ> rotated_cube; 
   RotateCloud(rotated_cube, cube, side);
 
-  std::cout << "Making cube dense" << std::endl;
-  pcl::PointCloud<pcl::PointXYZ> dense_cube; 
-  MakeDense(dense_cube, rotated_cube, WIDTH, HEIGHT);
+  int dense = 1;
+  if (argc > 2)
+    int dense = atoi(argv[2]);
 
-  pcl::io::savePCDFileASCII("cube.pcd", dense_cube);
+  pcl::PointCloud<pcl::PointXYZ> final_cube = rotated_cube; 
+  if (dense) {
+    std::cout << "Making cube dense" << std::endl;
+    MakeDense(final_cube, rotated_cube, WIDTH, HEIGHT);
+  }
+
+  pcl::io::savePCDFileASCII("cube.pcd", final_cube);
   return 0;
 }
