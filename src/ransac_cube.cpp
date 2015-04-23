@@ -4,6 +4,7 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include <pcl/features/integral_image_normal.h>
+#include <pcl/filters/extract_indices.h>
 #include <pcl/sample_consensus/ransac.h>
 #include <pcl/sample_consensus/sac_model_normal_plane.h>
 #include <pcl/visualization/pcl_visualizer.h>
@@ -11,9 +12,13 @@
 #include <set>
 #include <iterator>
 #include <algorithm>
+
+#define _USE_MATH_DEFINES
 #include <cassert>
+#include <cmath>
 
 #include <thread>
+#include <mutex>
 #include <memory>
 #include <chrono>
 
@@ -21,21 +26,33 @@
 #define POINT_SIZE 3
 
 using namespace pcl;
+using namespace Eigen;
 using namespace std;
 
 typedef shared_ptr<visualization::PCLVisualizer> ViewerPtr;
+typedef pcl::PointXYZ PointT;
+typedef pcl::PointCloud<PointT> CloudT;
+typedef pcl::PointCloud<Normal> NormalCloudT;
+typedef pcl::SampleConsensusModelPlane<PointT> PlaneModelT;
 
 ViewerPtr viewer;
+bool running;
 
-ViewerPtr InitViewer(PointCloud<PointXYZ>::ConstPtr cloud) {
-  ViewerPtr viewer(new visualization::PCLVisualizer("3D Viewer"));
+ViewerPtr InitViewer(vector<CloudT::Ptr>& clouds) {
+  ViewerPtr viewer{new visualization::PCLVisualizer("3D Viewer")};
 
   viewer->setBackgroundColor(0, 0, 0);  // black
 
-  visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> green_color(cloud, 0, 255, 0); // green
-  viewer->addPointCloud<PointXYZ>(cloud, green_color, "cloud");
-  viewer->setPointCloudRenderingProperties(
-      visualization::PCL_VISUALIZER_POINT_SIZE, POINT_SIZE, "cloud");
+  for (size_t i = 1; i < clouds.size(); i++) {
+    string cloud_name{"cloud"};
+    cloud_name += i;
+    int stride = 255 / clouds.size();
+    visualization::PointCloudColorHandlerCustom<PointT> color(clouds.at(i), 0, 255 - (stride * i), 0);
+    viewer->addPointCloud<PointT>(clouds.at(i), color, cloud_name);
+    viewer->setPointCloudRenderingProperties(
+        visualization::PCL_VISUALIZER_POINT_SIZE, POINT_SIZE, cloud_name);
+  }
+
   viewer->addCoordinateSystem(AXIS_SCALE, "global");
   viewer->initCameraParameters();
   return viewer;
@@ -59,106 +76,175 @@ void ViewerTask() {
   }
 }
 
-void LoadCubePC(PointCloud<PointXYZ>::Ptr &cloud) {
-  if (pcl::io::loadPCDFile<PointXYZ>("cube.pcd", *cloud) == -1) {
+// Loads the cube point cloud into the cloud reference parameter.
+void LoadCubePC(CloudT &cloud) {
+  if (io::loadPCDFile<PointXYZ>("cube.pcd", cloud) == -1) {
     cerr << "Could not open cube.pcd" << endl;
     exit(-1);
   }
 }
 
-bool FindPlanarInliers(vector<int> &inliers, 
-                       PointCloud<PointXYZ>::Ptr &final, 
-                       PointCloud<PointXYZ>::Ptr &cloud, 
-                       PointCloud<pcl::Normal>::Ptr &normals) {
+void FindPlanarInliers(vector<int> &inliers, 
+                       CloudT::Ptr output_cloud_ptr, 
+                       CloudT::Ptr input_cloud_ptr) {
   // created RandomSampleConsensus object and compute the appropriated model
   /* SampleConsensusModelNormalPlane<PointXYZ, pcl::Normal>::Ptr */ 
   /*     model_p(new SampleConsensusModelNormalPlane<PointXYZ, pcl::Normal>(cloud)); */
   /* model_p->setInputNormals(normals); */
   /* model_p->setNormalDistanceWeight(0.0); */
   SampleConsensusModelPlane<PointXYZ>::Ptr 
-      model_p(new SampleConsensusModelPlane<PointXYZ>(cloud));
+      model_p(new SampleConsensusModelPlane<PointXYZ>(input_cloud_ptr));
 
   RandomSampleConsensus<PointXYZ> ransac(model_p);
   ransac.setDistanceThreshold(100.0);
-  bool run = false;
-  if (!(run = ransac.computeModel()))
+
+  if (!(running = ransac.computeModel())) {
+    clog << "Running: " << running << endl;
     clog << "Could not find any planes!" << endl;
+  }
+
   ransac.getInliers(inliers);
   clog << "Number of inliers found: " << inliers.size() << endl;
 
   // copies all inliers of the model computed to another PointCloud
-  auto start = chrono::steady_clock::now();
-  copyPointCloud<PointXYZ>(*cloud, inliers, *final);
-  auto end = chrono::steady_clock::now();
-  cout << "Time to copy inliers: " 
-      << chrono::duration_cast<chrono::milliseconds>(end - start).count() 
-      << endl;
-
-  return run;
+  /* auto start = chrono::steady_clock::now(); */
+  /* copyPointCloud<PointXYZ>(input_cloud_ptr, inliers, output_cloud_ptr); */
+  /* auto end = chrono::steady_clock::now(); */
+  /* cout << "Time to copy inliers: " */ 
+  /*     << chrono::duration_cast<chrono::milliseconds>(end - start).count() */ 
+  /*     << endl; */
 }
 
-bool FindPlanarInliersBenchmarked(vector<int> &inliers, 
-                                  PointCloud<PointXYZ>::Ptr &final, 
-                                  PointCloud<PointXYZ>::Ptr &cloud, 
-                                  PointCloud<pcl::Normal>::Ptr &normals) {
+void FindPlanarInliersBenchmarked(vector<int> &inliers, 
+                                  CloudT::Ptr output_cloud_ptr, 
+                                  CloudT::Ptr input_cloud_ptr) {
     auto start = chrono::steady_clock::now();
-    bool run = FindPlanarInliers(inliers, final, cloud, normals);
+    FindPlanarInliers(inliers, output_cloud_ptr, input_cloud_ptr);
     auto end = chrono::steady_clock::now();
 
     cout << "Time for 1000 iterations: " 
         << chrono::duration_cast<chrono::milliseconds>(end - start).count() 
         << endl;
-
-    return run;
 }
 
-void FindCloudNormals(pcl::PointCloud<PointXYZ>::ConstPtr cloud,
-                      pcl::PointCloud<pcl::Normal>::Ptr normals) {
-    pcl::IntegralImageNormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
-    ne.setNormalEstimationMethod (ne.AVERAGE_DEPTH_CHANGE);
-    ne.setMaxDepthChangeFactor(0.1f);
-    ne.setNormalSmoothingSize(10.0f);
-    ne.setInputCloud(cloud);
-    ne.compute(*normals); 
-}
-
-void RemovePlanarInliers(pcl::PointCloud<PointXYZ>::Ptr cloud,
-                         pcl::PointCloud<PointXYZ>::Ptr final)
-{
-  pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-
-  bool run = true;
-  while (run) {
-    clog << endl << "Finding cloud normals" << endl;
-    auto start = chrono::steady_clock::now();
-    FindCloudNormals(cloud, normals);
-    auto end = chrono::steady_clock::now();
-    assert(normals->size() == cloud->size());
-
-    cout << "Time for normal estimation: " 
-        << chrono::duration_cast<chrono::milliseconds>(end - start).count() 
-        << endl;
-
-    // Add updated normals
-    UpdateCloudNormals(cloud, normals);
+void RemovePlanarInliers(CloudT::Ptr input_cloud_ptr,
+                         CloudT::Ptr output_cloud_ptr) {
+  running = true;
+  while (running) {
+      // Add updated normals
+    /* UpdateCloudNormals(cloud, normals); */
 
     clog << endl << "Finding planar inliers" << endl;
     vector<int> inliers;
-      run = FindPlanarInliersBenchmarked(inliers, final, cloud, normals);
+    FindPlanarInliersBenchmarked(inliers, output_cloud_ptr, input_cloud_ptr);
 
     // Delete from cloud
-    cout << "Erasing inliers" << endl;
-    start = chrono::steady_clock::now();
-    for (int i : inliers)
-      cloud->erase(cloud->begin() + i);
-    end = chrono::steady_clock::now();
-    cout << "Time for erasing inliers: " 
-        << chrono::duration_cast<chrono::milliseconds>(end - start).count() 
-        << endl;
+    /* cout << "Erasing inliers" << endl; */
+    /* auto start = chrono::steady_clock::now(); */
+    /* for (int i : inliers) */
+    /*   cloud->erase(cloud->begin() + i); */
+    /* auto end = chrono::steady_clock::now(); */
+    /* cout << "Time for erasing inliers: " */ 
+    /*     << chrono::duration_cast<chrono::milliseconds>(end - start).count() */ 
+    /*     << endl; */
 
     // Remove points from the viewer
-    UpdateCloudNormals(cloud, normals);
+    /* UpdateCloudNormals(cloud, normals); */
   }
+}
+
+void FindCloudNormals(CloudT::Ptr cloud_ptr,
+                      NormalCloudT &normals) {
+  IntegralImageNormalEstimation<PointXYZ, Normal> ne;
+  ne.setNormalEstimationMethod (ne.AVERAGE_DEPTH_CHANGE);
+  ne.setMaxDepthChangeFactor(0.3f);
+  ne.setNormalSmoothingSize(4.0f);
+  ne.setInputCloud(cloud_ptr);
+  ne.compute(normals); 
+}
+
+double NormalSimilarity(Normal n1, Normal n2) {
+  /* static double prev = 0; */
+  Vector4f v1 = n1.getNormalVector4fMap(), v2 = n2.getNormalVector4fMap();
+  double angle = getAngle3D(v1, v2);
+  double axis_angle = min(angle, abs(angle - M_PI));
+  /* if (axis_angle != prev) { */
+  /*   clog << axis_angle / M_PI * 180 << endl; */
+  /*   prev = axis_angle; */
+  /* } */
+  assert(axis_angle >= 0 && axis_angle <= M_PI);
+  return axis_angle;
+}
+
+void GenerateSubcloudsByNormals(CloudT::Ptr cloud_ptr,
+                                vector<CloudT::Ptr> &output,
+                                double threshold) {
+  NormalCloudT normals;
+
+  clog << endl << "Finding cloud normals" << endl;
+  auto start = chrono::steady_clock::now();
+  FindCloudNormals(cloud_ptr, normals);
+  auto end = chrono::steady_clock::now();
+  assert(normals.size() == cloud_ptr->size());
+
+  clog << "Time for finding cloud normals: " 
+      << chrono::duration_cast<chrono::milliseconds>(end - start).count() << " ms"
+      << endl;
+
+  // Allocate and reserve space for index data structures
+  vector<size_t> indices;
+  vector<size_t> new_indices;
+  indices.reserve(cloud_ptr->size());
+  new_indices.reserve(cloud_ptr->size());
+
+  // Initialize indices to search
+  for (size_t i = 0; i < cloud_ptr->size(); i++)
+    indices.push_back(i);
+
+  // Building subclouds
+  clog << "Building subclouds" << endl;
+  while (!indices.empty()) {
+    clog << indices.size() << " points remaining" << endl;
+    // Obtain representative point and its normal
+    while (!isfinite(normals.at(indices.back()).normal_x)) {
+      indices.pop_back();
+    }
+    int rep_index = indices.back();
+    indices.pop_back();
+    PointXYZ &rep = cloud_ptr->at(rep_index);
+    Normal &rep_normal = normals[rep_index];
+
+    // Add representative point to its own subcloud
+    output.push_back(CloudT::Ptr{new CloudT});
+    output.back()->push_back(rep);
+    assert(output.back()->size() == 1);
+
+    // Add points to the subcloud if they have similar normals to the
+    // representative point
+    for (size_t i : indices) {
+      if (!isfinite(normals.at(i).normal_x))
+        continue;
+
+      PointXYZ &point = cloud_ptr->at(i);
+      Normal &point_normal = normals[i];
+      double angle = NormalSimilarity(rep_normal, point_normal);
+      //clog << angle << endl;
+      if (angle < threshold) {
+        output.back()->push_back(point);
+      } else {
+        new_indices.push_back(i);
+      }
+    }
+
+    clog << "Number of points in subcloud: " << output.back()->size() << endl;
+    assert(new_indices.size() <= indices.size());
+
+    indices.swap(new_indices);
+    new_indices.clear();
+  }
+
+  clog << "Number of subclouds found: " << output.size() << endl;
+  assert(output.size() > 1);
 }
 
 int main(int argc, char** argv) {
@@ -166,19 +252,24 @@ int main(int argc, char** argv) {
 
   // initialize PointClouds
   clog << "Initializing point cloud with 640 * 480 points" << endl;
-  PointCloud<PointXYZ>::Ptr cloud(new PointCloud<PointXYZ>);
-  PointCloud<PointXYZ>::Ptr final(new PointCloud<PointXYZ>);
-  LoadCubePC(cloud);
+  CloudT::Ptr input_cloud{new CloudT}, final_output{new CloudT};
+  vector<CloudT::Ptr> subclouds;
+  vector<PlaneModelT> plane_models;
+  LoadCubePC(*input_cloud);
+
+  clog << "Generating subclouds" << endl;
+  GenerateSubcloudsByNormals(input_cloud, subclouds, M_PI / 8);
 
   clog << "Visualizing" << endl;
   // creates the visualization object and adds either our orignial cloud or all of the inliers
   // depending on the command line arguments specified.
-  viewer = InitViewer(cloud);
-  std::thread viewer_thread(ViewerTask);
+  viewer = InitViewer(subclouds);
+  thread viewer_thread(ViewerTask);
 
-  if(console::find_argument (argc, argv, "-f") >= 0)
-    RemovePlanarInliers(cloud, final);
+  if (console::find_argument (argc, argv, "-f") >= 0)
+    RemovePlanarInliers(input_cloud, final_output);
 
+  clog << endl << "Waiting for viewer to close" << endl;
   viewer_thread.join();
   return 0;
 }
