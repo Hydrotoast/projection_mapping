@@ -33,7 +33,12 @@ typedef shared_ptr<visualization::PCLVisualizer> ViewerPtr;
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> CloudT;
 typedef pcl::PointCloud<Normal> NormalCloudT;
-typedef pcl::SampleConsensusModelPlane<PointT> PlaneModelT;
+typedef Eigen::VectorXf PlaneCoeffsT;
+
+typedef struct PlaneSummaryT {
+  PlaneCoeffsT coeffs;
+  size_t points_size;
+} PlaneSummaryT;
 
 ViewerPtr viewer;
 bool running;
@@ -43,11 +48,11 @@ ViewerPtr InitViewer(vector<CloudT::Ptr>& clouds) {
 
   viewer->setBackgroundColor(0, 0, 0);  // black
 
-  for (size_t i = 1; i < clouds.size(); i++) {
+  for (size_t i = 0; i < clouds.size(); i++) {
     string cloud_name{"cloud"};
     cloud_name += i;
     int stride = 255 / clouds.size();
-    visualization::PointCloudColorHandlerCustom<PointT> color(clouds.at(i), 0, 255 - (stride * i), 0);
+    visualization::PointCloudColorHandlerCustom<PointT> color(clouds.at(i), stride * i, 255 - (stride * i), 0);
     viewer->addPointCloud<PointT>(clouds.at(i), color, cloud_name);
     viewer->setPointCloudRenderingProperties(
         visualization::PCL_VISUALIZER_POINT_SIZE, POINT_SIZE, cloud_name);
@@ -127,6 +132,107 @@ void FindPlanarInliersBenchmarked(vector<int> &inliers,
         << endl;
 }
 
+void FindPlanesInSubclouds(vector<CloudT::Ptr> &subclouds,
+                           vector<PlaneSummaryT> &plane_summs) {
+  for (size_t i = 1; i < subclouds.size(); i++) {
+    CloudT::Ptr cloud_ptr = subclouds.at(i);
+    
+    // Skip clouds with less than three points
+    clog << "Number of points in subcloud: " << cloud_ptr->size() << endl;
+    if (cloud_ptr->size() < 3)
+      continue;
+
+    plane_summs.push_back(PlaneSummaryT());
+    plane_summs.back().coeffs = Vector4f{};
+    plane_summs.back().points_size = cloud_ptr->size();
+
+    SampleConsensusModelPlane<PointXYZ>::Ptr 
+      model_ptr(new SampleConsensusModelPlane<PointXYZ>(cloud_ptr));
+
+    RandomSampleConsensus<PointXYZ> ransac(model_ptr);
+    ransac.setDistanceThreshold(100.0);
+    ransac.computeModel();
+    ransac.getModelCoefficients(plane_summs.back().coeffs);
+  }
+}
+
+typedef vector<size_t> Tuple3;
+
+vector<Tuple3> GenerateUptoTriplets(int n) {
+  if (n < 0) {
+    vector<Tuple3> triplets;
+    triplets.push_back({});
+    return triplets;
+  }
+  vector<Tuple3> subtriplets = GenerateUptoTriplets(n - 1);
+  vector<Tuple3> triplets(subtriplets);
+  for (Tuple3 &t : subtriplets) {
+    t.push_back(n);
+    if (t.size() > 3)
+      continue;
+    triplets.push_back(t);
+  }
+  return triplets;
+}
+
+vector<Tuple3> GenerateTriplets(int n) {
+  vector<Tuple3> upto_triplets = GenerateUptoTriplets(n);
+  vector<Tuple3> triplets;
+  for (Tuple3 triplet : upto_triplets) {
+    if (triplet.size() < 3)
+      continue;
+    triplets.push_back(triplet);
+  }
+  return triplets;
+}
+
+double CubeCost(Vector3f &n1, Vector3f &n2, Vector3f &n3) {
+  Vector3f n12_perp = n1.cross(n2);
+  Vector3f n23_perp = n2.cross(n3);
+  Vector3f n13_perp = n1.cross(n3);
+  double c3 = fabs(n12_perp.dot(n3));
+  double c1 = fabs(n23_perp.dot(n1));
+  double c2 = fabs(n13_perp.dot(n2));
+  return c3 + c1 + c2;
+}
+
+void FindCubeFromPlanes(vector<PlaneSummaryT> &plane_summs) {
+  vector<Tuple3> triplets = GenerateTriplets(plane_summs.size() - 1);
+  clog << "Number of planes: " << plane_summs.size() << endl;
+  clog << "Number of triplets: " << triplets.size() << endl;
+  Tuple3 *best_triplet;
+  double best_cost = numeric_limits<double>::min();
+  double best_unnormalized_cost = numeric_limits<double>::min();
+  for (Tuple3 &triplet : triplets) {
+    PlaneSummaryT &summ1 = plane_summs.at(triplet.at(0));
+    PlaneSummaryT &summ2 = plane_summs.at(triplet.at(1));
+    PlaneSummaryT &summ3 = plane_summs.at(triplet.at(2));
+    VectorXf &p1 = summ1.coeffs;
+    p1.conservativeResize(3, 1);
+    VectorXf &p2 = summ2.coeffs;
+    p2.conservativeResize(3, 1);
+    VectorXf &p3 = summ3.coeffs;
+    p3.conservativeResize(3, 1);
+    Vector3f n1{p1}, n2{p2}, n3{p3};
+    double unnormalized_cost = CubeCost(n1, n2, n3);
+    double cost = unnormalized_cost * (summ1.points_size + summ2.points_size + summ3.points_size);
+    if (cost > best_cost) {
+      best_cost = cost;
+      best_unnormalized_cost = unnormalized_cost;
+      best_triplet = &triplet;
+    }
+    clog << "Triplet: ";
+    for (size_t i : triplet)
+      clog << i << " ";
+    clog << " Cost: " << cost << endl;
+  }
+  clog << "Best triplet: ";
+  for (size_t i : *best_triplet)
+    clog << i << " ";
+  clog << endl;
+  clog << "Unnormalized cost: " << best_unnormalized_cost << endl;
+}
+
 void RemovePlanarInliers(CloudT::Ptr input_cloud_ptr,
                          CloudT::Ptr output_cloud_ptr) {
   running = true;
@@ -163,6 +269,8 @@ void FindCloudNormals(CloudT::Ptr cloud_ptr,
   ne.compute(normals); 
 }
 
+// Returns an angle between [0, PI / 2] which describes the similarity
+// between the two normals i.e. how close they are to each other.
 double NormalSimilarity(Normal n1, Normal n2) {
   /* static double prev = 0; */
   Vector4f v1 = n1.getNormalVector4fMap(), v2 = n2.getNormalVector4fMap();
@@ -254,11 +362,12 @@ int main(int argc, char** argv) {
   clog << "Initializing point cloud with 640 * 480 points" << endl;
   CloudT::Ptr input_cloud{new CloudT}, final_output{new CloudT};
   vector<CloudT::Ptr> subclouds;
-  vector<PlaneModelT> plane_models;
+  vector<PlaneSummaryT> plane_summs;
   LoadCubePC(*input_cloud);
 
-  clog << "Generating subclouds" << endl;
-  GenerateSubcloudsByNormals(input_cloud, subclouds, M_PI / 8);
+  int denom = 8;
+  GenerateSubcloudsByNormals(input_cloud, subclouds, M_PI / denom);
+  subclouds.erase(subclouds.begin());
 
   clog << "Visualizing" << endl;
   // creates the visualization object and adds either our orignial cloud or all of the inliers
@@ -266,8 +375,10 @@ int main(int argc, char** argv) {
   viewer = InitViewer(subclouds);
   thread viewer_thread(ViewerTask);
 
-  if (console::find_argument (argc, argv, "-f") >= 0)
-    RemovePlanarInliers(input_cloud, final_output);
+  if (console::find_argument (argc, argv, "-f") >= 0) {
+    FindPlanesInSubclouds(subclouds, plane_summs);
+    FindCubeFromPlanes(plane_summs);
+  }
 
   clog << endl << "Waiting for viewer to close" << endl;
   viewer_thread.join();
