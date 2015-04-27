@@ -91,6 +91,31 @@ void AddPlanes(ViewerPtr viewer_ptr, vector<ModelCoefficients> &coeffs) {
   }
 }
 
+void AddCube(ViewerPtr viewer_ptr)  {
+  Matrix3f normal_matrix;
+  normal_matrix <<
+      0.6993,   0.5034,   0.4954,
+      -0.0112,  -0.7003,  0.7182,
+      0.7147,   -0.5062,  -0.4887;
+  Vector3f translation{300.17, 238.04, 136.22};
+  Quaternionf rotation{normal_matrix};
+  double width = 100.0, height = 100.0, depth = 100.0;
+  viewer_ptr->addCube(translation, rotation, width, height, depth);
+
+  // Display the corner point
+  CloudT::Ptr corner_ptr{new CloudT{}};
+  corner_ptr->width = 1;
+  corner_ptr->height = 1;
+  corner_ptr->points.resize(1);
+  corner_ptr->points[0].x = 300.17;
+  corner_ptr->points[0].y = 238.04;
+  corner_ptr->points[0].z = 136.22;
+  visualization::PointCloudColorHandlerCustom<PointT> color(corner_ptr, 0, 0, 255);
+  viewer_ptr->addPointCloud<PointT>(corner_ptr, color, "corner");
+  viewer_ptr->setPointCloudRenderingProperties(
+      visualization::PCL_VISUALIZER_POINT_SIZE, POINT_SIZE, "corner");
+}
+
 /* void UpdateCloudNormals( */
 /*     PointCloud<PointXYZ>::ConstPtr cloud, */
 /*     PointCloud<Normal>::ConstPtr normals) { */
@@ -238,8 +263,11 @@ vector<ModelCoefficients> &ExtractModelCoefficients(
     assert(vector_coeffs.size() == 4);
 
     ModelCoefficients coeffs_obj;
-    for (int i = 0; i < vector_coeffs.size(); i++)
+    for (int i = 0; i < vector_coeffs.size(); i++) {
       coeffs_obj.values.push_back(vector_coeffs(i));
+      clog << vector_coeffs(i) << " ";
+    }
+    clog << endl;
 
     coeffs.push_back(coeffs_obj);
   }
@@ -263,6 +291,7 @@ void DisplayCube(Tuple3 triplet, vector<PlaneSummaryT> &plane_summs) {
   ViewerPtr viewer_ptr = InitViewer();
   AddClouds(viewer_ptr, cube_subclouds);
   AddPlanes(viewer_ptr, ExtractModelCoefficients(coeffs, cube_plane_summs));
+  AddCube(viewer_ptr);
   ViewerTask(viewer_ptr);
 }
 
