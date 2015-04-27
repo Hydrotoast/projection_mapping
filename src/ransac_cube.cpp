@@ -202,11 +202,11 @@ Tuple3 FindOrthoPlaneTriplet(vector<PlaneSummaryT> &plane_summs) {
     PlaneSummaryT &summ1 = plane_summs.at(triplet.at(0));
     PlaneSummaryT &summ2 = plane_summs.at(triplet.at(1));
     PlaneSummaryT &summ3 = plane_summs.at(triplet.at(2));
-    VectorXf &p1 = summ1.coeffs;
+    VectorXf p1{summ1.coeffs};
     p1.conservativeResize(3, 1);
-    VectorXf &p2 = summ2.coeffs;
+    VectorXf p2{summ2.coeffs};
     p2.conservativeResize(3, 1);
-    VectorXf &p3 = summ3.coeffs;
+    VectorXf p3{summ3.coeffs};
     p3.conservativeResize(3, 1);
     Vector3f n1{p1}, n2{p2}, n3{p3};
     double unnormalized_cost = CubeCost(n1, n2, n3);
@@ -235,9 +235,12 @@ vector<ModelCoefficients> &ExtractModelCoefficients(
     vector<ModelCoefficients> &coeffs, vector<PlaneSummaryT> &plane_summs) {
   for (PlaneSummaryT &plane_summ : plane_summs) {
     VectorXf &vector_coeffs = plane_summ.coeffs;
+    assert(vector_coeffs.size() == 4);
+
     ModelCoefficients coeffs_obj;
     for (int i = 0; i < vector_coeffs.size(); i++)
       coeffs_obj.values.push_back(vector_coeffs(i));
+
     coeffs.push_back(coeffs_obj);
   }
   return coeffs;
@@ -247,15 +250,19 @@ vector<ModelCoefficients> &ExtractModelCoefficients(
 // This will launch a viewer containing the inliers of the plane.
 void DisplayCube(Tuple3 triplet, vector<PlaneSummaryT> &plane_summs) {
   vector<CloudT::Ptr> cube_subclouds;
+  vector<PlaneSummaryT> cube_plane_summs;
 
-  // Copy subclouds used in the cube
-  for (size_t i : triplet)
+  // Copy subclouds and plane summaries used in the cube
+  for (size_t i : triplet) {
     cube_subclouds.push_back(plane_summs.at(i).subcloud_ptr);
+    cube_plane_summs.push_back(plane_summs.at(i));
+  }
 
   vector<ModelCoefficients> coeffs;
+
   ViewerPtr viewer_ptr = InitViewer();
-  AddClouds(viewer_ptr, cube_subclouds);
-  AddPlanes(viewer_ptr, ExtractModelCoefficients(coeffs, plane_summs));
+  /* AddClouds(viewer_ptr, cube_subclouds); */
+  AddPlanes(viewer_ptr, ExtractModelCoefficients(coeffs, cube_plane_summs));
   ViewerTask(viewer_ptr);
 }
 
