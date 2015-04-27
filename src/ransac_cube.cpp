@@ -263,8 +263,8 @@ void DisplayCube(Tuple3 triplet, vector<PlaneSummaryT> &plane_summs) {
 // results in the normals cloud.
 void EstimateCloudNormals(NormalCloudT &normals,
                       CloudT::Ptr cloud_ptr) {
-  IntegralImageNormalEstimation<PointXYZ, Normal> ne;
-  ne.setNormalEstimationMethod (ne.AVERAGE_DEPTH_CHANGE);
+  IntegralImageNormalEstimation<PointT, Normal> ne;
+  ne.setNormalEstimationMethod(ne.AVERAGE_DEPTH_CHANGE);
   ne.setMaxDepthChangeFactor(0.3f);
   ne.setNormalSmoothingSize(4.0f);
   ne.setInputCloud(cloud_ptr);
@@ -333,7 +333,8 @@ void PartitionSubcloudsByNormals(vector<CloudT::Ptr> &output,
       }
     }
 
-    clog << "Number of points in subcloud: " << output.back()->size() << endl;
+    clog << "Number of points in subcloud " << output.size() << ": " 
+        << output.back()->size() << endl;
     assert(new_indices.size() <= indices.size());
 
     indices.swap(new_indices);
