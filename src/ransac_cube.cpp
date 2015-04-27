@@ -261,7 +261,7 @@ void DisplayCube(Tuple3 triplet, vector<PlaneSummaryT> &plane_summs) {
   vector<ModelCoefficients> coeffs;
 
   ViewerPtr viewer_ptr = InitViewer();
-  /* AddClouds(viewer_ptr, cube_subclouds); */
+  AddClouds(viewer_ptr, cube_subclouds);
   AddPlanes(viewer_ptr, ExtractModelCoefficients(coeffs, cube_plane_summs));
   ViewerTask(viewer_ptr);
 }
