@@ -1,3 +1,5 @@
+#include "utility.hpp"
+
 #include <iostream>
 #include <pcl/console/parse.h>
 #include <pcl/filters/extract_indices.h>
@@ -29,7 +31,8 @@ using namespace pcl;
 using namespace Eigen;
 using namespace std;
 
-typedef shared_ptr<visualization::PCLVisualizer> ViewerPtr;
+typedef visualization::PCLVisualizer Viewer;
+typedef shared_ptr<Viewer> ViewerPtr;
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> CloudT;
 typedef pcl::PointCloud<Normal> NormalCloudT;
@@ -44,40 +47,62 @@ typedef struct PlaneSummaryT {
   size_t points_size;
 } PlaneSummaryT;
 
-ViewerPtr main_viewer_ptr;
 bool running;
 
-ViewerPtr InitViewer(vector<CloudT::Ptr>& clouds) {
-  ViewerPtr main_viewer_ptr{new visualization::PCLVisualizer("3D Viewer")};
+// Returns a shared pointer to a viewer object initialized with the clouds
+// parameter. The viewer is initialized with a black background and standard
+// (X, Y, Z) coordinate axes.
+ViewerPtr InitViewer() {
+  ViewerPtr viewer_ptr{new Viewer{"3D Viewer"}};
+  viewer_ptr->setBackgroundColor(0, 0, 0);  // black
 
-  main_viewer_ptr->setBackgroundColor(0, 0, 0);  // black
+  viewer_ptr->addCoordinateSystem(AXIS_SCALE, "global");
+  viewer_ptr->initCameraParameters();
+  return viewer_ptr;
+}
 
+
+// Adds each cloud in the `clouds` vector to the shared viewer specified by
+// `viewer_ptr`. Each cloud in the vector is colored with shade of red
+// and green.
+void AddClouds(ViewerPtr viewer_ptr, vector<CloudT::Ptr>& clouds) {
+  clog << "Adding " << clouds.size() << " clouds to the viewer" << endl;
+  int stride = 255 / clouds.size();
   for (size_t i = 0; i < clouds.size(); i++) {
     string cloud_name{"cloud"};
     cloud_name += i;
-    int stride = 255 / clouds.size();
-    visualization::PointCloudColorHandlerCustom<PointT> color(clouds.at(i), stride * i, 255 - (stride * i), 0);
-    main_viewer_ptr->addPointCloud<PointT>(clouds.at(i), color, cloud_name);
-    main_viewer_ptr->setPointCloudRenderingProperties(
+    visualization::PointCloudColorHandlerCustom<PointT> color(
+        clouds.at(i), stride * i, 255 - (stride * i), 0);
+    viewer_ptr->addPointCloud<PointT>(clouds.at(i), color, cloud_name);
+    viewer_ptr->setPointCloudRenderingProperties(
         visualization::PCL_VISUALIZER_POINT_SIZE, POINT_SIZE, cloud_name);
+
   }
-
-  main_viewer_ptr->addCoordinateSystem(AXIS_SCALE, "global");
-  main_viewer_ptr->initCameraParameters();
-  return main_viewer_ptr;
 }
 
-void UpdateCloudNormals(
-    PointCloud<PointXYZ>::ConstPtr cloud,
-    PointCloud<Normal>::ConstPtr normals) {
-  clog << "Updating point cloud and normals" << endl;
-  visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> green_color(cloud, 0, 255, 0); // green
-  main_viewer_ptr->updatePointCloud<PointXYZ>(cloud, green_color, "cloud");
-
-  main_viewer_ptr->removePointCloud("normals");
-  main_viewer_ptr->addPointCloudNormals<PointXYZ, Normal>(cloud, normals, 40, 40, "normals");
+// Adds a plane for each of the model coefficients given by the `coeffs` vector
+// to the shared viewer specified by `viewer_ptr`.
+void AddPlanes(ViewerPtr viewer_ptr, vector<ModelCoefficients> &coeffs) {
+  clog << "Adding " << coeffs.size() << " planes to the viewer" << endl;
+  for (size_t i = 0; i < coeffs.size(); i++) {
+    string name{"plane"};
+    name += i;
+    viewer_ptr->addPlane(coeffs.at(i), name);
+  }
 }
 
+/* void UpdateCloudNormals( */
+/*     PointCloud<PointXYZ>::ConstPtr cloud, */
+/*     PointCloud<Normal>::ConstPtr normals) { */
+/*   clog << "Updating point cloud and normals" << endl; */
+/*   visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> green_color(cloud, 0, 255, 0); // green */
+/*   main_viewer_ptr->updatePointCloud<PointXYZ>(cloud, green_color, "cloud"); */
+
+/*   main_viewer_ptr->removePointCloud("normals"); */
+/*   main_viewer_ptr->addPointCloudNormals<PointXYZ, Normal>(cloud, normals, 40, 40, "normals"); */
+/* } */
+
+// Runs the shared viewer specified by the `viewer_ptr`.
 void ViewerTask(ViewerPtr viewer_ptr) {
   while (!viewer_ptr->wasStopped()) {
     viewer_ptr->spinOnce(100);
@@ -124,20 +149,10 @@ void FindPlanarInliers(vector<int> &inliers,
   /*     << endl; */
 }
 
-void FindPlanarInliersBenchmarked(vector<int> &inliers, 
-                                  CloudT::Ptr output_cloud_ptr, 
-                                  CloudT::Ptr input_cloud_ptr) {
-    auto start = chrono::steady_clock::now();
-    FindPlanarInliers(inliers, output_cloud_ptr, input_cloud_ptr);
-    auto end = chrono::steady_clock::now();
-
-    cout << "Time for 1000 iterations: " 
-        << chrono::duration_cast<chrono::milliseconds>(end - start).count() 
-        << endl;
-}
-
-void FindPlanesInSubclouds(vector<CloudT::Ptr> &subclouds,
-                           vector<PlaneSummaryT> &plane_summs) {
+// Finds a single plane in each subcloud and stores the result in the plane
+// summaries vector.
+void FindPlanesInSubclouds(vector<PlaneSummaryT> &plane_summs,
+                           vector<CloudT::Ptr> &subclouds) {
   for (size_t i = 1; i < subclouds.size(); i++) {
     CloudT::Ptr cloud_ptr = subclouds.at(i);
     
@@ -162,36 +177,8 @@ void FindPlanesInSubclouds(vector<CloudT::Ptr> &subclouds,
   }
 }
 
-typedef vector<size_t> Tuple3;
-
-vector<Tuple3> GenerateUptoTriplets(int n) {
-  if (n < 0) {
-    vector<Tuple3> triplets;
-    triplets.push_back({});
-    return triplets;
-  }
-  vector<Tuple3> subtriplets = GenerateUptoTriplets(n - 1);
-  vector<Tuple3> triplets(subtriplets);
-  for (Tuple3 &t : subtriplets) {
-    t.push_back(n);
-    if (t.size() > 3)
-      continue;
-    triplets.push_back(t);
-  }
-  return triplets;
-}
-
-vector<Tuple3> GenerateTriplets(int n) {
-  vector<Tuple3> upto_triplets = GenerateUptoTriplets(n);
-  vector<Tuple3> triplets;
-  for (Tuple3 triplet : upto_triplets) {
-    if (triplet.size() < 3)
-      continue;
-    triplets.push_back(triplet);
-  }
-  return triplets;
-}
-
+// Cost function for three normal vectors estimating a cube which is primarily
+// determined by their orthogonality with each other.
 double CubeCost(Vector3f &n1, Vector3f &n2, Vector3f &n3) {
   Vector3f n12_perp = n1.cross(n2);
   Vector3f n23_perp = n2.cross(n3);
@@ -202,6 +189,8 @@ double CubeCost(Vector3f &n1, Vector3f &n2, Vector3f &n3) {
   return c3 + c1 + c2;
 }
 
+// Finds a triplet of orthogonal planes in the vector of plane summaries that
+// maximizes the CubeCost function.
 Tuple3 FindOrthoPlaneTriplet(vector<PlaneSummaryT> &plane_summs) {
   vector<Tuple3> triplets = GenerateTriplets(plane_summs.size() - 1);
   clog << "Number of planes: " << plane_summs.size() << endl;
@@ -227,10 +216,10 @@ Tuple3 FindOrthoPlaneTriplet(vector<PlaneSummaryT> &plane_summs) {
       best_unnormalized_cost = unnormalized_cost;
       best_triplet = &triplet;
     }
-    clog << "Triplet: ";
-    for (size_t i : triplet)
-      clog << i << " ";
-    clog << " Cost: " << cost << endl;
+    /* clog << "Triplet: "; */
+    /* for (size_t i : triplet) */
+    /*   clog << i << " "; */
+    /* clog << " Cost: " << cost << endl; */
   }
   clog << "Best triplet: ";
   for (size_t i : *best_triplet)
@@ -240,6 +229,22 @@ Tuple3 FindOrthoPlaneTriplet(vector<PlaneSummaryT> &plane_summs) {
   return *best_triplet;
 }
 
+// Extracts model coefficients from the plane summaries into a vector of
+// ModelCoefficients for displaying on the viewer.
+vector<ModelCoefficients> &ExtractModelCoefficients(
+    vector<ModelCoefficients> &coeffs, vector<PlaneSummaryT> &plane_summs) {
+  for (PlaneSummaryT &plane_summ : plane_summs) {
+    VectorXf &vector_coeffs = plane_summ.coeffs;
+    ModelCoefficients coeffs_obj;
+    for (int i = 0; i < vector_coeffs.size(); i++)
+      coeffs_obj.values.push_back(vector_coeffs(i));
+    coeffs.push_back(coeffs_obj);
+  }
+  return coeffs;
+}
+
+// Displays the cube specified by the planes indexed the by the triplet.
+// This will launch a viewer containing the inliers of the plane.
 void DisplayCube(Tuple3 triplet, vector<PlaneSummaryT> &plane_summs) {
   vector<CloudT::Ptr> cube_subclouds;
 
@@ -247,38 +252,17 @@ void DisplayCube(Tuple3 triplet, vector<PlaneSummaryT> &plane_summs) {
   for (size_t i : triplet)
     cube_subclouds.push_back(plane_summs.at(i).subcloud_ptr);
 
-  main_viewer_ptr = InitViewer(cube_subclouds);
-  ViewerTask(main_viewer_ptr);
+  vector<ModelCoefficients> coeffs;
+  ViewerPtr viewer_ptr = InitViewer();
+  AddClouds(viewer_ptr, cube_subclouds);
+  AddPlanes(viewer_ptr, ExtractModelCoefficients(coeffs, plane_summs));
+  ViewerTask(viewer_ptr);
 }
 
-void RemovePlanarInliers(CloudT::Ptr input_cloud_ptr,
-                         CloudT::Ptr output_cloud_ptr) {
-  running = true;
-  while (running) {
-      // Add updated normals
-    /* UpdateCloudNormals(cloud, normals); */
-
-    clog << endl << "Finding planar inliers" << endl;
-    vector<int> inliers;
-    FindPlanarInliersBenchmarked(inliers, output_cloud_ptr, input_cloud_ptr);
-
-    // Delete from cloud
-    /* cout << "Erasing inliers" << endl; */
-    /* auto start = chrono::steady_clock::now(); */
-    /* for (int i : inliers) */
-    /*   cloud->erase(cloud->begin() + i); */
-    /* auto end = chrono::steady_clock::now(); */
-    /* cout << "Time for erasing inliers: " */ 
-    /*     << chrono::duration_cast<chrono::milliseconds>(end - start).count() */ 
-    /*     << endl; */
-
-    // Remove points from the main_viewer_ptr
-    /* UpdateCloudNormals(cloud, normals); */
-  }
-}
-
-void FindCloudNormals(CloudT::Ptr cloud_ptr,
-                      NormalCloudT &normals) {
+// Estimates cloud normals from the specified cloud pointer and stores the
+// results in the normals cloud.
+void EstimateCloudNormals(NormalCloudT &normals,
+                      CloudT::Ptr cloud_ptr) {
   IntegralImageNormalEstimation<PointXYZ, Normal> ne;
   ne.setNormalEstimationMethod (ne.AVERAGE_DEPTH_CHANGE);
   ne.setMaxDepthChangeFactor(0.3f);
@@ -287,29 +271,16 @@ void FindCloudNormals(CloudT::Ptr cloud_ptr,
   ne.compute(normals); 
 }
 
-// Returns an angle between [0, PI / 2] which describes the similarity
-// between the two normals i.e. how close they are to each other.
-double NormalSimilarity(Normal n1, Normal n2) {
-  /* static double prev = 0; */
-  Vector4f v1 = n1.getNormalVector4fMap(), v2 = n2.getNormalVector4fMap();
-  double angle = getAngle3D(v1, v2);
-  double axis_angle = min(angle, abs(angle - M_PI));
-  /* if (axis_angle != prev) { */
-  /*   clog << axis_angle / M_PI * 180 << endl; */
-  /*   prev = axis_angle; */
-  /* } */
-  assert(axis_angle >= 0 && axis_angle <= M_PI);
-  return axis_angle;
-}
-
-void GenerateSubcloudsByNormals(CloudT::Ptr cloud_ptr,
-                                vector<CloudT::Ptr> &output,
-                                double threshold) {
+// Partitions the cloud pointed to by the cloud pointer into subclouds based on
+// the similiarty of their normal vectors.
+void PartitionSubcloudsByNormals(vector<CloudT::Ptr> &output,
+                                 CloudT::Ptr cloud_ptr,
+                                 double threshold) {
   NormalCloudT normals;
 
   clog << endl << "Finding cloud normals" << endl;
   auto start = chrono::steady_clock::now();
-  FindCloudNormals(cloud_ptr, normals);
+  EstimateCloudNormals(normals, cloud_ptr);
   auto end = chrono::steady_clock::now();
   assert(normals.size() == cloud_ptr->size());
 
@@ -376,26 +347,28 @@ void GenerateSubcloudsByNormals(CloudT::Ptr cloud_ptr,
 int main(int argc, char** argv){
   srand(time(NULL));
 
-  // initialize PointClouds
+  // Initialize point clouds
   clog << "Initializing point cloud with 640 * 480 points" << endl;
   CloudT::Ptr input_cloud{new CloudT}, final_output{new CloudT};
   vector<CloudT::Ptr> subclouds;
   vector<PlaneSummaryT> plane_summs;
   LoadCubePC(*input_cloud);
 
+  // Generate the subclouds
   int denom = 8;
-  GenerateSubcloudsByNormals(input_cloud, subclouds, M_PI / denom);
+  PartitionSubcloudsByNormals(subclouds, input_cloud, M_PI / denom);
   subclouds.erase(subclouds.begin());
 
+  // View the initial subclouds partitioned by their normal
   clog << "Visualizing" << endl;
-  // creates the visualization object and adds either our orignial cloud or all of the inliers
-  // depending on the command line arguments specified.
-  main_viewer_ptr = InitViewer(subclouds);
+  ViewerPtr main_viewer_ptr = InitViewer();
+  AddClouds(main_viewer_ptr, subclouds);
   ViewerTask(main_viewer_ptr);
   clog << endl << "Waiting for main_viewer_ptr to close" << endl;
 
-  if (console::find_argument (argc, argv, "-f") >= 0) {
-    FindPlanesInSubclouds(subclouds, plane_summs);
+  // Find cube given the subclouds
+  if (console::find_argument(argc, argv, "-f") >= 0) {
+    FindPlanesInSubclouds(plane_summs, subclouds);
     DisplayCube(FindOrthoPlaneTriplet(plane_summs), plane_summs);
   }
 

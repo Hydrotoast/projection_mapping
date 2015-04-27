@@ -82,10 +82,14 @@ set(LIBRARIES
   ${GLUT_LIBRARIES}
   ${VTK_LIBRARIES}
   m
-  pthread)
+  pthread
+  utility)
 
 include_directories("include")
 add_definitions(-std=c++11) 
+
+add_library(utility src/utility.cpp)
+
 add_executable(projection_mapping src/main.cpp)
 target_link_libraries(projection_mapping ${LIBRARIES})
 
