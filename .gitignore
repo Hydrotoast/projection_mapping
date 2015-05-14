@@ -7,6 +7,9 @@ bin
 build
 doc
 
+# Tags
+tags
+
 # Libraries
 lib/eigen
 lib/eigen_src
