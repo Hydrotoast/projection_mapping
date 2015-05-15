@@ -69,44 +69,6 @@ int WINDOW_HEIGHT = 480;
  **/
 pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ptr;
 
-void opengl_draw() {
-  
-}
-
-void opengl_resize(int width, int height) {
-  glViewport(0, 0, width, height);
-  glMatrixMode(GL_PROJECTION);
-  glLoadIdentity();
-  glOrtho(0, WINDOW_WIDTH, 0, WINDOW_HEIGHT, -5.0f, 5.0f);
-  glMatrixMode(GL_MODELVIEW);
-  glLoadIdentity();
-}
-
-void opengl_init(int width, int height) {
-  glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-
-  opengl_resize(width, height);
-}
-
-/**
- * Executes the OpenGL thread
- **/
-void opengl_runner(int argc, char* argv[]) {
-  glutInit(&argc, argv);
-  glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);
-  glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
-  glutInitWindowPosition(0, 0);
-
-  window = glutCreateWindow("Projection Pipeline");
-
-  glutDisplayFunc(&opengl_draw);
-  glutReshapeFunc(&opengl_resize);
-
-  opengl_init(WINDOW_WIDTH, WINDOW_HEIGHT);
-
-  glutMainLoop();
-}
-
 void pcl_runner() {
   while (true) {
     // Copy depth buffer into point cloud_ptr
