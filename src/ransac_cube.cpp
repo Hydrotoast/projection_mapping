@@ -4,23 +4,15 @@
 #include <pcl/point_types.h>
 #include <pcl/features/integral_image_normal.h>
 #include <pcl/sample_consensus/ransac.h>
-#include <pcl/sample_consensus/sac_model_normal_plane.h>
+#include <pcl/sample_consensus/sac_model_plane.h>
 #include <pcl/segmentation/organized_multi_plane_segmentation.h>
 
-#include <iterator>
-#include <algorithm>
-
 #define _USE_MATH_DEFINES
+#include <algorithm>
 #include <cassert>
-#include <cmath>
-
-#include <thread>
-#include <mutex>
-#include <memory>
 #include <chrono>
-
-#define AXIS_SCALE 160.0
-#define POINT_SIZE 3
+#include <cmath>
+#include <iterator>
 
 using namespace pcl;
 using namespace Eigen;

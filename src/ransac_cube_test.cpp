@@ -7,20 +7,18 @@
 #include <pcl/point_types.h>
 #include <pcl/features/integral_image_normal.h>
 #include <pcl/sample_consensus/ransac.h>
-#include <pcl/sample_consensus/sac_model_normal_plane.h>
+#include <pcl/sample_consensus/sac_model_plane.h>
 #include <pcl/visualization/pcl_visualizer.h>
 
-#include <iterator>
-#include <algorithm>
-
 #define _USE_MATH_DEFINES
+#include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cmath>
-
+#include <iterator>
 #include <thread>
 #include <mutex>
 #include <memory>
-#include <chrono>
 
 #define AXIS_SCALE 160.0
 #define POINT_SIZE 3
@@ -29,8 +27,8 @@ using namespace pcl;
 using namespace Eigen;
 using namespace std;
 
-typedef visualization::PCLVisualizer Viewer;
-typedef shared_ptr<Viewer> ViewerPtr;
+using Viewer = pcl::visualization::PCLVisualizer;
+using ViewerPtr = std::shared_ptr<Viewer>;
 
 static bool running;
 

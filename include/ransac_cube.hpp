@@ -3,7 +3,6 @@
 
 #include "utility.hpp"
 
-#include <iostream>
 #include <pcl/point_types.h>
 #include <pcl/features/integral_image_normal.h>
 #include <pcl/sample_consensus/ransac.h>
@@ -11,30 +10,13 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/segmentation/planar_region.h>
 
-#include <algorithm>
-#include <iterator>
 #include <vector>
 
-#define _USE_MATH_DEFINES
-#include <cmath>
-
-#include <thread>
-#include <mutex>
-#include <memory>
-#include <chrono>
-
-#define AXIS_SCALE 160.0
-#define POINT_SIZE 3
-
-using namespace Eigen;
-
-typedef pcl::visualization::PCLVisualizer Viewer;
-typedef std::shared_ptr<Viewer> ViewerPtr;
-typedef pcl::PointXYZ Point;
-typedef pcl::PointCloud<Point> Cloud;
-typedef std::vector<int> Indices;
-typedef pcl::PointCloud<pcl::Normal> NormalCloud;
-typedef Eigen::VectorXf PlaneCoeffs;
+using Point = pcl::PointXYZ;
+using Cloud = pcl::PointCloud<Point>;
+using Indices = std::vector<int>;
+using NormalCloud = pcl::PointCloud<pcl::Normal>;
+using PlaneCoeffs = Eigen::VectorXf;
 
 using Regions = std::vector<pcl::PlanarRegion<Point>,
   Eigen::aligned_allocator<pcl::PlanarRegion<Point>>>;
@@ -57,7 +39,7 @@ FindPlanesInSubclouds(Cloud::Ptr cloud_ptr, std::vector<Indices>& subclouds);
 // Cost function for three normal vectors estimating a cube which is primarily
 // determined by their orthogonality with each other.
 double
-CubeCost(Vector3f& n1, Vector3f& n2, Vector3f& n3);
+CubeCost(Eigen::Vector3f& n1, Eigen::Vector3f& n2, Eigen::Vector3f& n3);
 
 // Finds a triplet of orthogonal planes in the vector of plane summaries that
 // maximizes the CubeCost function.
