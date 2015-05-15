@@ -149,14 +149,28 @@ FindPlanarInliers(vector<int>& inliers,
 
   ransac.getInliers(inliers);
   clog << "Number of inliers found: " << inliers.size() << endl;
+}
 
-  // copies all inliers of the model computed to another PointCloud
-  /* auto start = chrono::steady_clock::now(); */
-  /* copyPointCloud<PointXYZ>(input_cloud_ptr, inliers, output_cloud_ptr); */
-  /* auto end = chrono::steady_clock::now(); */
-  /* cout << "Time to copy inliers: " */ 
-  /*     << chrono::duration_cast<chrono::milliseconds>(end - start).count() */ 
-  /*     << endl; */
+// Extracts model coefficients from the plane summaries into a vector of
+// ModelCoefficients for displaying on the viewer.
+vector<ModelCoefficients> 
+ExtractModelCoefficients(vector<PlaneSummary>& plane_summs)
+{
+  vector<ModelCoefficients> coeffs;
+  for (PlaneSummary &plane_summ : plane_summs) {
+    VectorXf &vector_coeffs = plane_summ.coeffs;
+    assert(vector_coeffs.size() == 4);
+
+    ModelCoefficients coeffs_obj;
+    for (int i = 0; i < vector_coeffs.size(); i++) {
+      coeffs_obj.values.push_back(vector_coeffs(i));
+      clog << vector_coeffs(i) << " ";
+    }
+    clog << endl;
+
+    coeffs.push_back(coeffs_obj);
+  }
+  return coeffs;
 }
 
 // Displays the cube specified by the planes indexed the by the triplet.

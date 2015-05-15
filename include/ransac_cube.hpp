@@ -46,11 +46,6 @@ CubeCost(Eigen::Vector3f& n1, Eigen::Vector3f& n2, Eigen::Vector3f& n3);
 Tuple3
 FindOrthoPlaneTriplet(std::vector<PlaneSummary>& plane_summs);
 
-// Extracts model coefficients from the plane summaries into a vector of
-// ModelCoefficients for displaying on the viewer.
-std::vector<pcl::ModelCoefficients>
-ExtractModelCoefficients(std::vector<PlaneSummary>& plane_summs);
-
 // Estimates cloud normals from the specified cloud pointer and stores the
 // results in the normals cloud.
 NormalCloud
