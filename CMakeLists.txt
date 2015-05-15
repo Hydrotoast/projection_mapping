@@ -82,16 +82,15 @@ set(LIBRARIES
   ${GLUT_LIBRARIES}
   ${VTK_LIBRARIES}
   m
-  pthread
-  utility)
+  pthread)
 
 include_directories("include")
 add_definitions(-std=c++11) 
 
-add_library(utility src/utility.cpp)
+add_library(ransac_cube src/ransac_cube.cpp src/utility.cpp)
 
 add_executable(projection_mapping src/main.cpp)
-target_link_libraries(projection_mapping ${LIBRARIES})
+target_link_libraries(projection_mapping ${LIBRARIES} ransac_cube)
 
 add_executable(cube_generator src/cube_generator.cpp)
 target_link_libraries(cube_generator ${LIBRARIES})
@@ -99,8 +98,8 @@ target_link_libraries(cube_generator ${LIBRARIES})
 add_executable(ransac src/ransac.cpp)
 target_link_libraries(ransac ${LIBRARIES})
 
-add_executable(ransac_cube src/ransac_cube.cpp)
-target_link_libraries(ransac_cube ${LIBRARIES})
+add_executable(ransac_cube_test src/ransac_cube_test.cpp) 
+target_link_libraries(ransac_cube_test ${LIBRARIES} ransac_cube)
 
 #add_executable(reconstruct_cube src/reconstruct_cube.cpp)
 #target_link_libraries(reconstruct_cube ${LIBRARIES})

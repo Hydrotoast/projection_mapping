@@ -25,4 +25,5 @@ OpenGL stack:
 Benchmarks
 ----------
 
-Plane Segmentation with RANSAC in PCL: 44ms
+Plane Segmentation with RANSAC in PCL: 44 ms
+Partitioning 11 subclouds by normals: 557 ms 

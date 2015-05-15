@@ -1,5 +1,3 @@
-#include "ransac_cube.hpp"
-#include "utility.hpp"
 #include "buffers.h"
 
 #include "libfreenect.h"
@@ -67,7 +65,7 @@ int WINDOW_HEIGHT = 480;
 /**
  * PCL State
  **/
-pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ptr;
+pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
 
 void opengl_draw() {
   
@@ -109,62 +107,46 @@ void opengl_runner(int argc, char* argv[]) {
 
 void pcl_runner() {
   while (true) {
-    // Copy depth buffer into point cloud_ptr
+    // Copy depth buffer into point cloud
     *pcl_back >> pcl_front;
 
-    auto start = std::chrono::high_resolution_clock::now();
     for (int col = 0; col < WINDOW_WIDTH; col++) {
       for (int row = 0; row < WINDOW_HEIGHT; row++) {
-        int cell = row * WINDOW_WIDTH + col;
-        cloud_ptr->points[cell].x = col;
-        cloud_ptr->points[cell].y = row;
-        cloud_ptr->points[cell].z = pcl_front[cell];
+        int cell = row * WINDOW_HEIGHT + col;
+        cloud->points[cell].x = row;
+        cloud->points[cell].y = col;
+        cloud->points[cell].z = pcl_front[cell];
       }
     }
+
+    // Perform plane segmentation and time it
+    auto start = std::chrono::high_resolution_clock::now();
+
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+
+    pcl::SACSegmentation<pcl::PointXYZ> seg;
+    seg.setOptimizeCoefficients(true);
+    seg.setModelType(pcl::SACMODEL_PLANE);
+    seg.setMethodType(pcl::SAC_RANSAC);
+    seg.setMaxIterations(100);
+    seg.setDistanceThreshold(0.01);
+
+    seg.setInputCloud(cloud);
+    seg.segment(*inliers, *coefficients);
+
     auto end = std::chrono::high_resolution_clock::now();
-    printf("Cloud copy time: (%.4f ms)\n", 
-        std::chrono::duration<double, std::milli>(end - start).count());
 
-    // Generate the subcloud_ptrs
-    start = std::chrono::high_resolution_clock::now();
-    static int denom = 8;
-    std::vector<Indices> subcloud_indices = PartitionSubcloudsByNormals(cloud_ptr, M_PI / denom);
-    end = std::chrono::high_resolution_clock::now();
-    printf("Subcloud partitioning time: (%.4f ms)\n", 
-        std::chrono::duration<double, std::milli>(end - start).count());
-
-    // Try multiplane segmentation
-    start = std::chrono::high_resolution_clock::now();
-    Regions regions = SegmentRegions(cloud_ptr);
-    end = std::chrono::high_resolution_clock::now();
-    cout << "Time to segment planar regions " << regions.size() << " planar regions: " 
-        << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() 
-        << " ms" << endl;
-
-    // Find cube given the subcloud_indices
-    start = std::chrono::high_resolution_clock::now();
-    std::vector<PlaneSummary> plane_summs = FindPlanesInSubclouds(cloud_ptr, subcloud_indices);
-    end = std::chrono::high_resolution_clock::now();
-    printf("Finding planes in subclouds time: (%.4f ms)\n", 
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
-
-    start = std::chrono::high_resolution_clock::now();
-    Tuple3 triplet = FindOrthoPlaneTriplet(plane_summs);
-    /* vector<Cloud::Ptr> cube_subclouds; */
-    /* vector<PlaneSummary> cube_plane_summs; */
-
-    // Copy subclouds and plane summaries used in the cube
-    for (size_t i : triplet) {
-      /* cube_subclouds.push_back(plane_summs.at(i).subcloud_ptr); */
-      /* cube_plane_summs.push_back(plane_summs.at(i)); */
-      std::clog << plane_summs.back().coeffs.x() << " "
-          << plane_summs.back().coeffs.x() << " "
-          << plane_summs.back().coeffs.x() << " "
-          << plane_summs.back().coeffs.x() << std::endl;
+    if (inliers->indices.size() == 0) {
+      printf("No planes found!\n");
+    } else {
+      printf("Model coefficients: %.2f, %.2f, %.2f, %.2f (%.2f ms)\n", 
+          coefficients->values[0],
+          coefficients->values[1],
+          coefficients->values[2],
+          coefficients->values[3],
+          std::chrono::duration<double, std::milli>(end - start).count());
     }
-    end = std::chrono::high_resolution_clock::now();
-    printf("Cube parameter estimation time: (%.4f ms)\n", 
-        std::chrono::duration<double, std::milli>(end - start).count());
   }
 }
 
@@ -243,11 +225,11 @@ void init_freenect() {
 }
 
 int main(int argc, char *argv[]) {
-  // Allocate cloud_ptr
-  cloud_ptr = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
-  cloud_ptr->width = WINDOW_WIDTH;
-  cloud_ptr->height = WINDOW_HEIGHT;
-  cloud_ptr->points.resize(cloud_ptr->width * cloud_ptr->height);
+  // Allocate cloud
+  cloud = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
+  cloud->width = WINDOW_WIDTH;
+  cloud->height = WINDOW_HEIGHT;
+  cloud->points.resize(cloud->width * cloud->height);
 
   // Allocate depth buffers
   freenect_depth_buffer = new uint16_t[WINDOW_WIDTH * WINDOW_HEIGHT];
@@ -269,7 +251,7 @@ int main(int argc, char *argv[]) {
   std::thread freenect_thread(freenect_runner);
   std::thread pcl_thread(pcl_runner);
 
-  /* opengl_runner(argc, argv); */
+  opengl_runner(argc, argv);
 
   freenect_thread.join();
   pcl_thread.join();
