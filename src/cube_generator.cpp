@@ -66,16 +66,16 @@ void MakeDense(pcl::PointCloud<pcl::PointXYZ> &dense_cloud,
   dense_cloud.resize(width * height);
 
   // Initialize dense image as zeros
-  for (size_t x = 0; x < height; x++) 
-    for (size_t y = 0; y < width; y++) 
-      dense_cloud.points[x * width + y].getVector3fMap() = Eigen::Vector3f(x, y, 0); 
+  for (size_t y = 0; y < height; y++) 
+    for (size_t x = 0; x < width; x++) 
+      dense_cloud.points[y * width + x].getVector3fMap() = Eigen::Vector3f(x, y, 0); 
 
   for (auto point : cloud)
   {
-    assert(lround(point.y) * height + lround(point.x) >= 0);
+    assert(lround(point.y) * width + lround(point.x) >= 0);
     float x_round = lround(point.x), y_round = lround(point.y);
 
-    auto current_point = dense_cloud.points[x_round * width + y_round].getVector3fMap();
+    auto current_point = dense_cloud.points[y_round * width + x_round].getVector3fMap();
     auto new_point = Eigen::Vector3f(x_round, y_round, point.z);
 
     if (new_point(2) <= current_point(2))
