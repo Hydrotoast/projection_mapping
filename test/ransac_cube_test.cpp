@@ -1,3 +1,5 @@
+#include "drawable.hpp"
+#include "renderer.hpp"
 #include "ransac_cube.hpp"
 #include "utility.hpp"
 
@@ -23,12 +25,16 @@
 #define AXIS_SCALE 160.0
 #define POINT_SIZE 3
 
+using namespace giocc;
+
 using namespace pcl;
 using namespace Eigen;
 using namespace std;
 
 using Viewer = pcl::visualization::PCLVisualizer;
 using ViewerPtr = std::shared_ptr<Viewer>;
+
+Renderer<Cube> renderer{640, 480};
 
 static bool running;
 
@@ -46,20 +52,34 @@ InitViewer()
   return viewer_ptr;
 }
 
+// Add an individual cloud to the shared viewer `viewer_ptr`. 
+void
+AddCloud(ViewerPtr viewer_ptr, Cloud::Ptr cloud_ptr)
+{
+  clog << "Adding cloud to the viewer" << endl;
+  string cloud_name{"cloud_main"};
+  visualization::PointCloudColorHandlerCustom<Point> color(
+      cloud_ptr, 0, 0, 255);
+  viewer_ptr->addPointCloud<Point>(cloud_ptr, color, cloud_name);
+  viewer_ptr->setPointCloudRenderingProperties(
+      visualization::PCL_VISUALIZER_POINT_SIZE, POINT_SIZE, cloud_name);
+}
+
 // Adds each cloud in the `clouds` vector to the shared viewer specified by
 // `viewer_ptr`. Each cloud in the vector is colored with shade of red
 // and green.
 void
-AddClouds(ViewerPtr viewer_ptr, vector<Cloud::Ptr>& clouds)
+AddClouds(ViewerPtr viewer_ptr, Cloud::Ptr cloud, vector<Indices>& clouds)
 {
   clog << "Adding " << clouds.size() << " clouds to the viewer" << endl;
   int stride = 255 / clouds.size();
   for (size_t i = 0; i < clouds.size(); i++) {
     string cloud_name{"cloud"};
     cloud_name += i;
+    Cloud::Ptr cloud_ptr{new Cloud{*cloud, clouds.at(i)}};
     visualization::PointCloudColorHandlerCustom<Point> color(
-        clouds.at(i), stride * i, 255 - (stride * i), 0);
-    viewer_ptr->addPointCloud<Point>(clouds.at(i), color, cloud_name);
+        cloud_ptr, stride * i, 255 - (stride * i), 0);
+    viewer_ptr->addPointCloud<Point>(cloud_ptr, color, cloud_name);
     viewer_ptr->setPointCloudRenderingProperties(
         visualization::PCL_VISUALIZER_POINT_SIZE, POINT_SIZE, cloud_name);
 
@@ -187,11 +207,21 @@ DisplayCube(Tuple3 triplet, vector<PlaneSummary>& plane_summs)
     cube_plane_summs.push_back(plane_summs.at(i));
   }
 
-  ViewerPtr viewer_ptr = InitViewer();
-  AddClouds(viewer_ptr, cube_subclouds);
-  AddPlanes(viewer_ptr, ExtractModelCoefficients(cube_plane_summs));
-  AddCube(viewer_ptr);
-  ViewerTask(viewer_ptr);
+  CubeParams params = EstimateCubeParams(triplet, plane_summs);
+
+  std::clog << "Rendering cube" << std::endl;
+  renderer.camera_position({0, 0, 100});
+  renderer.scale({5.397, 5.397, 5.397});
+  std::array<GLfloat, 16> rotation;
+  for (int col = 0; col < 4; col++)
+    for (int row = 0; row < 4; row++)
+      rotation.at(col * 4 + row) = params.rotation(row, col);
+  renderer.rotation(rotation);
+  float x = params.translation(0), y = params.translation(1), z = params.translation(2);
+  float za = zcm(z);
+  float xa = xcm(x, za), ya = ycm(y, za);
+  renderer.translation({xa, ya, za});
+  renderer();
 }
 
 int main(int argc, char** argv)
@@ -219,17 +249,21 @@ int main(int argc, char** argv)
       << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() 
       << " ms" << endl;
 
-  // View the initial subcloud_indices partitioned by their normal
-  /* clog << "Visualizing" << endl; */
-  /* ViewerPtr main_viewer_ptr = InitViewer(); */
-  /* AddClouds(main_viewer_ptr, subcloud_indices); */
-  /* ViewerTask(main_viewer_ptr); */
-  /* clog << endl << "Waiting for main_viewer_ptr to close" << endl; */
 
   // Find cube given the subcloud_indices
   if (console::find_argument(argc, argv, "-f") >= 0) {
     vector<PlaneSummary> plane_summs = FindPlanesInSubclouds(input_cloud, subcloud_indices);
     DisplayCube(FindOrthoPlaneTriplet(plane_summs), plane_summs);
+  }
+  else
+  {
+    // View the initial subcloud_indices partitioned by their normal
+    clog << "Visualizing" << endl;
+    ViewerPtr main_viewer_ptr = InitViewer();
+    /* AddCloud(main_viewer_ptr, input_cloud); */
+    AddClouds(main_viewer_ptr, input_cloud, subcloud_indices);
+    ViewerTask(main_viewer_ptr);
+    clog << endl << "Waiting for main_viewer_ptr to close" << endl;
   }
 
   return 0;

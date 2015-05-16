@@ -50,7 +50,7 @@ void RotateCloud(pcl::PointCloud<pcl::PointXYZ> &rotated_cube,
                  int side) {
   // Build rotation matrix
   Eigen::Affine3f transform(
-    Eigen::Translation<float,3>(WIDTH / 2,  HEIGHT / 2, side / 2)
+    Eigen::Translation<float,3>(WIDTH / 4,  HEIGHT / 4, side / 2)
     * Eigen::AngleAxisf(QUARTER_CW, Eigen::Vector3f::UnitY()) 
     * Eigen::AngleAxisf(QUARTER_CCW, Eigen::Vector3f::UnitX()));
 

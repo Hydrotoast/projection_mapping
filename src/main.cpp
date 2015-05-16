@@ -1,3 +1,5 @@
+#include "drawable.hpp"
+#include "renderer.hpp"
 #include "ransac_cube.hpp"
 #include "utility.hpp"
 #include "buffers.h"
@@ -28,6 +30,8 @@
 
 #define PKTS_PER_XFER 32
 #define NUM_XFERS 6
+
+using namespace giocc;
 
 /**
  * Concurrency
@@ -60,9 +64,9 @@ uint8_t *freenect_rgb_buffer, *rgb_front;
 /**
  * OpenGL state
  **/
-int window;
 int WINDOW_WIDTH = 640;
 int WINDOW_HEIGHT = 480;
+Renderer<Cube> renderer{WINDOW_WIDTH, WINDOW_HEIGHT};
 
 /**
  * PCL State
@@ -112,18 +116,25 @@ void pcl_runner() {
 
     start = std::chrono::high_resolution_clock::now();
     Tuple3 triplet = FindOrthoPlaneTriplet(plane_summs);
-    /* vector<Cloud::Ptr> cube_subclouds; */
-    /* vector<PlaneSummary> cube_plane_summs; */
+
+    std::clog << "Rendering cube" << std::endl;
+    CubeParams params = EstimateCubeParams(triplet, plane_summs);
+
+    renderer.camera_position({0, 0, 100});
+    renderer.scale({5.397, 5.397, 5.397});
 
     // Copy subclouds and plane summaries used in the cube
-    for (size_t i : triplet) {
-      /* cube_subclouds.push_back(plane_summs.at(i).subcloud_ptr); */
-      /* cube_plane_summs.push_back(plane_summs.at(i)); */
-      std::clog << plane_summs.back().coeffs.x() << " "
-          << plane_summs.back().coeffs.x() << " "
-          << plane_summs.back().coeffs.x() << " "
-          << plane_summs.back().coeffs.x() << std::endl;
-    }
+    std::array<GLfloat, 16> rotation;
+    for (int col = 0; col < 4; col++)
+      for (int row = 0; row < 4; row++)
+        rotation.at(col * 4 + row) = params.rotation(row, col);
+    renderer.rotation(rotation);
+
+    float x = params.translation(0), y = params.translation(1), z = params.translation(2);
+    float za = zcm(z);
+    float xa = xcm(x, za), ya = ycm(y, za);
+    renderer.translation({xa, ya, za});
+    renderer();
     end = std::chrono::high_resolution_clock::now();
     printf("Cube parameter estimation time: (%.4f ms)\n", 
         std::chrono::duration<double, std::milli>(end - start).count());
@@ -231,7 +242,8 @@ int main(int argc, char *argv[]) {
   std::thread freenect_thread(freenect_runner);
   std::thread pcl_thread(pcl_runner);
 
-  /* opengl_runner(argc, argv); */
+  // Run the renderer
+  renderer();
 
   freenect_thread.join();
   pcl_thread.join();

@@ -95,7 +95,7 @@ add_library(ransac_cube src/ransac_cube.cpp src/utility.cpp)
 add_library(drawable src/drawable.cpp)
 
 add_executable(projection_mapping src/main.cpp)
-target_link_libraries(projection_mapping ${LIBRARIES} ransac_cube)
+target_link_libraries(projection_mapping ${LIBRARIES} ${RENDERER_LIBRARIES} ransac_cube drawable)
 
 # Utility binary
 add_executable(cube_generator src/cube_generator.cpp)
@@ -106,7 +106,7 @@ add_executable(ransac_plane_test test/ransac_plane_test.cpp)
 target_link_libraries(ransac_plane_test ${LIBRARIES})
 
 add_executable(ransac_cube_test test/ransac_cube_test.cpp) 
-target_link_libraries(ransac_cube_test ${LIBRARIES} ransac_cube)
+target_link_libraries(ransac_cube_test ${LIBRARIES} ${RENDERER_LIBRARIES} ransac_cube drawable)
 
 add_executable(renderer_test test/renderer_test.cpp) 
 target_link_libraries(renderer_test ${RENDERER_LIBRARIES} drawable)

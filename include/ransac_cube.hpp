@@ -31,6 +31,28 @@ typedef struct PlaneSummary
   size_t points_size;
 } PlaneSummary;
 
+// Describes the cube extrinsic parameters in cm
+typedef struct CubeParams
+{
+  Eigen::Matrix4f rotation;
+  Eigen::Vector3f translation;
+} CubeParams;
+
+
+// Window parameters
+extern int WINDOW_WIDTH;
+extern int WINDOW_HEIGHT;
+
+// Depth calibration
+extern float k1;
+extern float k2;
+extern float k3;
+
+// Coordinate transformation
+float zcm(float z);
+float xcm(float x, float zcm);
+float ycm(float y, float zcm);
+
 // Finds a single plane in each subcloud and stores the result in the plane
 // summaries vector.
 std::vector<PlaneSummary>
@@ -45,6 +67,11 @@ CubeCost(Eigen::Vector3f& n1, Eigen::Vector3f& n2, Eigen::Vector3f& n3);
 // maximizes the CubeCost function.
 Tuple3
 FindOrthoPlaneTriplet(std::vector<PlaneSummary>& plane_summs);
+
+// Estimates the extrinsic parameters of the cube in centimeters.
+CubeParams
+EstimateCubeParams(const Tuple3& triplet,
+                   std::vector<PlaneSummary>& plane_summs);
 
 // Estimates cloud normals from the specified cloud pointer and stores the
 // results in the normals cloud.

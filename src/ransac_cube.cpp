@@ -18,6 +18,23 @@ using namespace pcl;
 using namespace Eigen;
 using namespace std;
 
+float k1 = 0.1236;
+float k2 = 2842.5;
+float k3 = 1.1863;
+
+float zcm(float z) { return k1 * tanf(z / k2 + k3) * 100; }
+
+float xcm(float x, float zcm)
+{
+  static float asp = 640 / 480.0;
+  return (x - 640 / 2) * (zcm - 10) * .0021 * asp;
+}
+
+float ycm(float y, float zcm)
+{
+  return (y - 480 / 2) * (zcm - 10) * .0021;
+}
+
 // Finds a single plane in each subcloud and stores the result in the plane
 // summaries vector.
 vector<PlaneSummary>
@@ -102,6 +119,35 @@ Tuple3 FindOrthoPlaneTriplet(vector<PlaneSummary>& plane_summs)
   clog << endl;
   clog << "Unnormalized cost: " << best_unnormalized_cost << endl;
   return *best_triplet;
+}
+
+// Estimates the extrinsic parameters of the cube in centimeters.
+CubeParams
+EstimateCubeParams(const Tuple3& triplet,
+                   std::vector<PlaneSummary>& plane_summs)
+{
+  CubeParams params;
+
+  // Construct system of equations
+  Eigen::Matrix3f A;
+  Eigen::Vector3f b;
+  int row = 0;
+  for (size_t i : triplet) {
+    PlaneCoeffs& v = plane_summs.at(i).coeffs;
+    A.row(row) = v.head<3>();
+    b(row) = v.tail<4>()(1);
+    row++;
+  }
+
+  // Solve for corner in system
+  Eigen::FullPivHouseholderQR<Eigen::Matrix3f> QR{A};
+  params.translation = QR.solve(-b);
+
+  // Construct rotation from normals
+  params.rotation.setIdentity(4, 4);
+  params.rotation.block<3,3>(0, 0) = A;
+
+  return params;
 }
 
 // Estimates cloud normals from the specified cloud pointer and stores the

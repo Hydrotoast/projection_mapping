@@ -40,6 +40,7 @@ public:
   const Vec3f& world_position() const;
   const Mat4f& rotation() const;
   const Vec3f& translation() const;
+  const Vec3f& scale() const;
 
   int width() const;
   int height() const;
@@ -50,6 +51,7 @@ public:
   void world_position(Vec3f v);
   void rotation(Mat4f m);
   void translation(Vec3f v);
+  void scale(Vec3f);
 
   // Runs the system
   void operator()();
@@ -68,6 +70,7 @@ private:
   // Object extrinsic parameters
   Mat4f rotation_;
   Vec3f translation_;
+  Vec3f scale_;
 
   // GLFW Window fields
   int width_;
@@ -126,6 +129,10 @@ const typename Renderer<Shape>::Vec3f&
 Renderer<Shape>::translation() const { return translation_; };
 
 template <typename Shape>
+const typename Renderer<Shape>::Vec3f&
+Renderer<Shape>::scale() const { return scale_; };
+
+template <typename Shape>
 int
 Renderer<Shape>::width() const { return width_; };
 
@@ -156,6 +163,10 @@ Renderer<Shape>::translation(Vec3f v) { translation_ = v; };
 
 template <typename Shape>
 void
+Renderer<Shape>::scale(Vec3f v) { scale_ = v; };
+
+template <typename Shape>
+void
 Renderer<Shape>::display()
 {
   while (!glfwWindowShouldClose(window_))
@@ -171,7 +182,7 @@ Renderer<Shape>::display()
 
     glMatrixMode(GL_PROJECTION_MATRIX);
     glLoadIdentity();
-    gluPerspective(60, (double)windowWidth / (double)windowHeight, 0.1, 100);
+    gluPerspective(45.6, (double)windowWidth / (double)windowHeight, 0.1, 500);
 
     glMatrixMode(GL_MODELVIEW_MATRIX);
     // View transformation
@@ -183,6 +194,7 @@ Renderer<Shape>::display()
 
     // Model transformation
     glTranslatef(translation_.at(0), translation_.at(1), translation_.at(2));
+    glScalef(scale_.at(0), scale_.at(1), scale_.at(2));
     glMultMatrixf(rotation_.data());
     
     // Draw object
