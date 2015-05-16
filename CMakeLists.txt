@@ -60,26 +60,30 @@ include(${VTK_USE_FILE})
 #  message(STATUS "${_variableName}=${${_variableName}}")
 # endforeach()
 
-# Use OpenGL, GLU, and GLUT
+# Use OpenGL, GLU 
 find_package(OpenGL REQUIRED)
 find_package(GLU REQUIRED)
-find_package(GLUT REQUIRED)
-include_directories(${OPENGL_INCLUDE_DIRS} ${GLU_INCLUDE_DIRS} ${GLUT_INCLUDE_DIRS})
-link_directories(${OPENGL_LIBRARY_DIRS} ${GLU_LIBRARY_DIRS} ${GLUT_LIBRARY_DIRS})
-add_definitions(${OPENGL_DEFINITIONS} ${GLU_DEFINITIONS} ${GLUT_DEFINITIONS})
+include_directories(${OPENGL_INCLUDE_DIRS} ${GLU_INCLUDE_DIRS})
+link_directories(${OPENGL_LIBRARY_DIRS} ${GLU_LIBRARY_DIRS})
+add_definitions(${OPENGL_DEFINITIONS} ${GLU_DEFINITIONS})
+
+pkg_check_modules(GLFW glfw3)
 
 find_package(Boost COMPONENTS system thread)
 include_directories(${Boost_INCLUDE_DIRS})
 message("${FREENECT_INCLUDE_DIRS}")
+
+set(RENDERER_LIBRARIES
+  ${OPENGL_LIBRARIES}
+  ${GLU_LIBRARIES}
+  ${GLFW_STATIC_LIBRARIES}
+  )
 
 set(LIBRARIES
   ${Boost_LIBRARIES}
   ${PCL_LIBRARIES}
   ${USB_LIBRARIES}
   ${FREENECT_LIBRARIES}
-  ${OPENGL_LIBRARIES}
-  ${GLU_LIBRARIES}
-  ${GLUT_LIBRARIES}
   ${VTK_LIBRARIES}
   m
   pthread)
@@ -88,6 +92,7 @@ include_directories("include")
 add_definitions(-std=c++11) 
 
 add_library(ransac_cube src/ransac_cube.cpp src/utility.cpp)
+add_library(drawable src/drawable.cpp)
 
 add_executable(projection_mapping src/main.cpp)
 target_link_libraries(projection_mapping ${LIBRARIES} ransac_cube)
@@ -100,6 +105,9 @@ target_link_libraries(ransac ${LIBRARIES})
 
 add_executable(ransac_cube_test test/ransac_cube_test.cpp) 
 target_link_libraries(ransac_cube_test ${LIBRARIES} ransac_cube)
+
+add_executable(renderer_test test/renderer_test.cpp) 
+target_link_libraries(renderer_test ${RENDERER_LIBRARIES} drawable)
 
 #add_executable(reconstruct_cube src/reconstruct_cube.cpp)
 #target_link_libraries(reconstruct_cube ${LIBRARIES})
