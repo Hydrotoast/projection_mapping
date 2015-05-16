@@ -104,28 +104,6 @@ Tuple3 FindOrthoPlaneTriplet(vector<PlaneSummary>& plane_summs)
   return *best_triplet;
 }
 
-// Extracts model coefficients from the plane summaries into a vector of
-// ModelCoefficients for displaying on the viewer.
-vector<ModelCoefficients> 
-ExtractModelCoefficients(vector<PlaneSummary>& plane_summs)
-{
-  vector<ModelCoefficients> coeffs;
-  for (PlaneSummary &plane_summ : plane_summs) {
-    VectorXf &vector_coeffs = plane_summ.coeffs;
-    assert(vector_coeffs.size() == 4);
-
-    ModelCoefficients coeffs_obj;
-    for (int i = 0; i < vector_coeffs.size(); i++) {
-      coeffs_obj.values.push_back(vector_coeffs(i));
-      clog << vector_coeffs(i) << " ";
-    }
-    clog << endl;
-
-    coeffs.push_back(coeffs_obj);
-  }
-  return coeffs;
-}
-
 // Estimates cloud normals from the specified cloud pointer and stores the
 // results in the normals cloud.
 NormalCloud

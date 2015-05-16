@@ -12,6 +12,7 @@ public:
       buffers::SharedBuffer<uint8_t> &rgb_back);
   ~FreenectWorker();
 
+  // Too expensive to copy or move
   FreenectWorker(const FreenectWorker&) = delete;
   FreenectWorker& operator=(const FreenectWorker&) = delete;
   FreenectWorker(FreenectWorker&&);
@@ -22,7 +23,6 @@ public:
   void video_callback(freenect_device *dev, void *v_video, uint32_t timestamp);
 
   // Call operator
-
   void operator()();
 private:
   int width_;
