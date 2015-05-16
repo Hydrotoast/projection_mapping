@@ -98,7 +98,7 @@ target_link_libraries(cube_generator ${LIBRARIES})
 add_executable(ransac src/ransac.cpp)
 target_link_libraries(ransac ${LIBRARIES})
 
-add_executable(ransac_cube_test src/ransac_cube_test.cpp) 
+add_executable(ransac_cube_test test/ransac_cube_test.cpp) 
 target_link_libraries(ransac_cube_test ${LIBRARIES} ransac_cube)
 
 #add_executable(reconstruct_cube src/reconstruct_cube.cpp)
