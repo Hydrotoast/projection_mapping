@@ -16,20 +16,10 @@ using Point = pcl::PointXYZ;
 using Cloud = pcl::PointCloud<Point>;
 using Indices = std::vector<int>;
 using NormalCloud = pcl::PointCloud<pcl::Normal>;
-using PlaneCoeffs = Eigen::VectorXf;
+using PlaneCoeffs = Eigen::Vector4f;
 
-using Regions = std::vector<pcl::PlanarRegion<Point>,
-  Eigen::aligned_allocator<pcl::PlanarRegion<Point>>>;
-
-typedef struct PlaneSummary
-{
-  // Points to the subcloud where the points were found
-  Cloud::Ptr subcloud_ptr;
-
-  PlaneCoeffs coeffs;
-  std::vector<int> inliers;
-  size_t points_size;
-} PlaneSummary;
+using Region = pcl::PlanarRegion<Point>;
+using Regions = std::vector<Region, Eigen::aligned_allocator<Region>>;
 
 // Describes the cube extrinsic parameters in cm
 typedef struct CubeParams
@@ -53,10 +43,10 @@ float zcm(float z);
 float xcm(float x, float zcm);
 float ycm(float y, float zcm);
 
-// Finds a single plane in each subcloud and stores the result in the plane
-// summaries vector.
-std::vector<PlaneSummary>
-FindPlanesInSubclouds(Cloud::Ptr cloud_ptr, std::vector<Indices>& subclouds);
+/* // Finds a single plane in each subcloud and stores the result in the plane */
+/* // summaries vector. */
+/* std::vector<Region> */
+/* FindPlanesInSubclouds(Cloud::Ptr cloud_ptr, std::vector<Indices>& subclouds); */
 
 // Cost function for three normal vectors estimating a cube which is primarily
 // determined by their orthogonality with each other.
@@ -66,25 +56,24 @@ CubeCost(Eigen::Vector3f& n1, Eigen::Vector3f& n2, Eigen::Vector3f& n3);
 // Finds a triplet of orthogonal planes in the vector of plane summaries that
 // maximizes the CubeCost function.
 Tuple3
-FindOrthoPlaneTriplet(std::vector<PlaneSummary>& plane_summs);
+FindOrthoPlaneTriplet(Regions& plane_summs);
 
 // Estimates the extrinsic parameters of the cube in centimeters.
 CubeParams
-EstimateCubeParams(const Tuple3& triplet,
-                   std::vector<PlaneSummary>& plane_summs);
+EstimateCubeParams(const Tuple3& triplet, Regions& plane_summs);
 
 // Estimates cloud normals from the specified cloud pointer and stores the
 // results in the normals cloud.
 NormalCloud
 EstimateCloudNormals(Cloud::Ptr cloud_ptr);
 
-// Partitions the cloud pointed to by the cloud pointer into subclouds based on
-// the similiarty of their normal vectors.
-std::vector<Indices>
-PartitionSubcloudsByNormals(Cloud::Ptr cloud_ptr, double threshold);
+/* // Partitions the cloud pointed to by the cloud pointer into subclouds based on */
+/* // the similiarty of their normal vectors. */
+/* std::vector<Indices> */
+/* PartitionSubcloudsByNormals(Cloud::Ptr cloud_ptr, double threshold); */
 
 // Segment input cloud into planar regions with inliers determined by an
 // angular threshold and a distance threshold
-Regions SegmentRegions(Cloud::Ptr input_cloud);
+Regions SegmentRegions(Cloud input_cloud);
 
 #endif

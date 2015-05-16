@@ -171,52 +171,17 @@ FindPlanarInliers(vector<int>& inliers,
   clog << "Number of inliers found: " << inliers.size() << endl;
 }
 
-// Extracts model coefficients from the plane summaries into a vector of
-// ModelCoefficients for displaying on the viewer.
-vector<ModelCoefficients> 
-ExtractModelCoefficients(vector<PlaneSummary>& plane_summs)
-{
-  vector<ModelCoefficients> coeffs;
-  for (PlaneSummary &plane_summ : plane_summs) {
-    VectorXf &vector_coeffs = plane_summ.coeffs;
-    assert(vector_coeffs.size() == 4);
-
-    ModelCoefficients coeffs_obj;
-    for (int i = 0; i < vector_coeffs.size(); i++) {
-      coeffs_obj.values.push_back(vector_coeffs(i));
-      clog << vector_coeffs(i) << " ";
-    }
-    clog << endl;
-
-    coeffs.push_back(coeffs_obj);
-  }
-  return coeffs;
-}
-
 // Displays the cube specified by the planes indexed the by the triplet.
 // This will launch a viewer containing the inliers of the plane.
 void
-DisplayCube(Tuple3 triplet, vector<PlaneSummary>& plane_summs)
+DisplayCube(Tuple3 triplet, Regions& regions)
 {
-  vector<Cloud::Ptr> cube_subclouds;
-  vector<PlaneSummary> cube_plane_summs;
-
-  // Copy subclouds and plane summaries used in the cube
-  for (size_t i : triplet) {
-    cube_subclouds.push_back(plane_summs.at(i).subcloud_ptr);
-    cube_plane_summs.push_back(plane_summs.at(i));
-  }
-
-  CubeParams params = EstimateCubeParams(triplet, plane_summs);
+  CubeParams params = EstimateCubeParams(triplet, regions);
 
   std::clog << "Rendering cube" << std::endl;
   renderer.camera_position({0, 0, 100});
   renderer.scale({5.397, 5.397, 5.397});
-  std::array<GLfloat, 16> rotation;
-  for (int col = 0; col < 4; col++)
-    for (int row = 0; row < 4; row++)
-      rotation.at(col * 4 + row) = params.rotation(row, col);
-  renderer.rotation(rotation);
+  renderer.rotation(params.rotation);
   float x = params.translation(0), y = params.translation(1), z = params.translation(2);
   float za = zcm(z);
   float xa = xcm(x, za), ya = ycm(y, za);
@@ -233,18 +198,9 @@ int main(int argc, char** argv)
   Cloud::Ptr input_cloud{new Cloud}, final_output{new Cloud};
   LoadCubePC(*input_cloud);
 
-  // Generate the subclouds
-  int denom = 8;
   auto start = std::chrono::steady_clock::now();
-  vector<Indices> subcloud_indices = PartitionSubcloudsByNormals(input_cloud, M_PI / denom);
+  Regions regions = SegmentRegions(*input_cloud);
   auto end = std::chrono::steady_clock::now();
-  cout << "Time to partition subcloud_indices by normals: " 
-      << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() 
-      << " ms" << endl;
-
-  start = std::chrono::steady_clock::now();
-  Regions regions = SegmentRegions(input_cloud);
-  end = std::chrono::steady_clock::now();
   cout << "Time to segment planar regions " << regions.size() << " planar regions: " 
       << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() 
       << " ms" << endl;
@@ -252,8 +208,7 @@ int main(int argc, char** argv)
 
   // Find cube given the subcloud_indices
   if (console::find_argument(argc, argv, "-f") >= 0) {
-    vector<PlaneSummary> plane_summs = FindPlanesInSubclouds(input_cloud, subcloud_indices);
-    DisplayCube(FindOrthoPlaneTriplet(plane_summs), plane_summs);
+    DisplayCube(FindOrthoPlaneTriplet(regions), regions);
   }
   else
   {
@@ -261,7 +216,7 @@ int main(int argc, char** argv)
     clog << "Visualizing" << endl;
     ViewerPtr main_viewer_ptr = InitViewer();
     /* AddCloud(main_viewer_ptr, input_cloud); */
-    AddClouds(main_viewer_ptr, input_cloud, subcloud_indices);
+    /* AddClouds(main_viewer_ptr, input_cloud, subcloud_indices); */
     ViewerTask(main_viewer_ptr);
     clog << endl << "Waiting for main_viewer_ptr to close" << endl;
   }

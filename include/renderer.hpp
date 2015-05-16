@@ -1,6 +1,7 @@
 #ifndef CUBE_RENDERER_HPP
 #define CUBE_RENDERER_HPP
 
+#include <Eigen/Dense>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
@@ -22,9 +23,6 @@ template <typename Shape>
 class Renderer
 {
 public:
-  using Mat4f = std::array<float, 16>;
-  using Vec3f = std::array<float, 3>;
-
   // Initialized a GLFW window with the specified width and height parameters.
   Renderer(int width, int height);
   ~Renderer();
@@ -35,23 +33,23 @@ public:
   void display();
 
   // Accessors
-  const Vec3f& camera_position() const;
-  const Vec3f& view_direction() const;
-  const Vec3f& world_position() const;
-  const Mat4f& rotation() const;
-  const Vec3f& translation() const;
-  const Vec3f& scale() const;
+  const Eigen::Vector3f& camera_position() const;
+  const Eigen::Vector3f& view_direction() const;
+  const Eigen::Vector3f& world_position() const;
+  const Eigen::Matrix4f& rotation() const;
+  const Eigen::Vector3f& translation() const;
+  const Eigen::Vector3f& scale() const;
 
   int width() const;
   int height() const;
 
   // Modifiers
-  void camera_position(Vec3f v);
-  void view_direction(Vec3f v);
-  void world_position(Vec3f v);
-  void rotation(Mat4f m);
-  void translation(Vec3f v);
-  void scale(Vec3f);
+  void camera_position(Eigen::Vector3f v);
+  void view_direction(Eigen::Vector3f v);
+  void world_position(Eigen::Vector3f v);
+  void rotation(Eigen::Matrix4f m);
+  void translation(Eigen::Vector3f v);
+  void scale(Eigen::Vector3f v);
 
   // Runs the system
   void operator()();
@@ -63,14 +61,14 @@ private:
   static GLFWwindow* init_window(int width, int height);
 
   // Scene extrinsic paramters
-  Vec3f camera_position_;
-  Vec3f view_direction_;
-  Vec3f world_position_;
+  Eigen::Vector3f camera_position_;
+  Eigen::Vector3f view_direction_;
+  Eigen::Vector3f world_position_;
 
   // Object extrinsic parameters
-  Mat4f rotation_;
-  Vec3f translation_;
-  Vec3f scale_;
+  Eigen::Matrix4f rotation_;
+  Eigen::Vector3f translation_;
+  Eigen::Vector3f scale_;
 
   // GLFW Window fields
   int width_;
@@ -84,16 +82,12 @@ Renderer<Shape>::Renderer(int width, int height)
     , height_{height}
     , window_{init_window(width, height)}
     // Scene extrinsic paramters
-    , camera_position_{{0, 0, -5}}
-    , view_direction_{{0, 1, 0}}
-    , world_position_{{0, 0, 0}}
+    , camera_position_{0, 0, -5}
+    , view_direction_{0, 1, 0}
+    , world_position_{0, 0, 0}
     // Object extrinsic parameters
-    , rotation_{{
-      1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 1, 0,
-      0, 0, 0, 1}}
-    , translation_{{0, 0, 0}}
+    , rotation_{Eigen::Matrix4f::Identity(4,4)}
+    , translation_{0, 0, 0}
 {
   if (window_ == nullptr)
     throw std::runtime_error{"Failed to initialize GLFW window"};
@@ -109,27 +103,27 @@ Renderer<Shape>::~Renderer()
 // Accessors
 
 template <typename Shape>
-const typename Renderer<Shape>::Vec3f&
+const Eigen::Vector3f&
 Renderer<Shape>::camera_position() const { return camera_position_; };
 
 template <typename Shape>
-const typename Renderer<Shape>::Vec3f&
+const Eigen::Vector3f&
 Renderer<Shape>::view_direction() const { return view_direction_; };
 
 template <typename Shape>
-const typename Renderer<Shape>::Vec3f&
+const Eigen::Vector3f&
 Renderer<Shape>::world_position() const { return world_position_; };
 
 template <typename Shape>
-const typename Renderer<Shape>::Mat4f&
+const Eigen::Matrix4f&
 Renderer<Shape>::rotation() const { return rotation_; };
 
 template <typename Shape>
-const typename Renderer<Shape>::Vec3f&
+const Eigen::Vector3f&
 Renderer<Shape>::translation() const { return translation_; };
 
 template <typename Shape>
-const typename Renderer<Shape>::Vec3f&
+const Eigen::Vector3f&
 Renderer<Shape>::scale() const { return scale_; };
 
 template <typename Shape>
@@ -143,27 +137,27 @@ Renderer<Shape>::height() const { return height_; };
 // Mutators
 template <typename Shape>
 void
-Renderer<Shape>::camera_position(Vec3f v) { camera_position_ = v; };
+Renderer<Shape>::camera_position(Eigen::Vector3f v) { camera_position_ = v; };
 
 template <typename Shape>
 void
-Renderer<Shape>::view_direction(Vec3f v) { view_direction_ = v; };
+Renderer<Shape>::view_direction(Eigen::Vector3f v) { view_direction_ = v; };
 
 template <typename Shape>
 void
-Renderer<Shape>::world_position(Vec3f v) { world_position_ = v; };
+Renderer<Shape>::world_position(Eigen::Vector3f v) { world_position_ = v; };
 
 template <typename Shape>
 void
-Renderer<Shape>::rotation(Mat4f m) { rotation_ = m; };
+Renderer<Shape>::rotation(Eigen::Matrix4f m) { rotation_ = m; };
 
 template <typename Shape>
 void
-Renderer<Shape>::translation(Vec3f v) { translation_ = v; };
+Renderer<Shape>::translation(Eigen::Vector3f v) { translation_ = v; };
 
 template <typename Shape>
 void
-Renderer<Shape>::scale(Vec3f v) { scale_ = v; };
+Renderer<Shape>::scale(Eigen::Vector3f v) { scale_ = v; };
 
 template <typename Shape>
 void
@@ -187,16 +181,17 @@ Renderer<Shape>::display()
     glMatrixMode(GL_MODELVIEW_MATRIX);
     // View transformation
     gluLookAt(
-      camera_position_.at(0), camera_position_.at(1), camera_position_.at(2), 
-      world_position_.at(0),  world_position_.at(1),  world_position_.at(2),
-      view_direction_.at(0),  view_direction_.at(1),  view_direction_.at(2)
+      camera_position_(0), camera_position_(1), camera_position_(2), 
+      world_position_(0),  world_position_(1),  world_position_(2),
+      view_direction_(0),  view_direction_(1),  view_direction_(2)
     );
 
     // Model transformation
-    glTranslatef(translation_.at(0), translation_.at(1), translation_.at(2));
-    glScalef(scale_.at(0), scale_.at(1), scale_.at(2));
+    glTranslatef(translation_(0), translation_(1), translation_(2));
+    glScalef(scale_(0), scale_(1), scale_(2));
     glMultMatrixf(rotation_.data());
-    
+    /* glTranslatef(scale_(0) / 2.0, scale_(1) / 2.0, -scale_(2) / 2.0); */
+
     // Draw object
     Shape::draw();
 

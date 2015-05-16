@@ -92,52 +92,55 @@ void pcl_runner() {
         std::chrono::duration<double, std::milli>(end - start).count());
 
     // Generate the subcloud_ptrs
-    start = std::chrono::high_resolution_clock::now();
-    static int denom = 8;
-    std::vector<Indices> subcloud_indices = PartitionSubcloudsByNormals(cloud_ptr, M_PI / denom);
-    end = std::chrono::high_resolution_clock::now();
-    printf("Subcloud partitioning time: (%.4f ms)\n", 
-        std::chrono::duration<double, std::milli>(end - start).count());
+    /* start = std::chrono::high_resolution_clock::now(); */
+    /* static int denom = 8; */
+    /* std::vector<Indices> subcloud_indices = PartitionSubcloudsByNormals(cloud_ptr, M_PI / denom); */
+    /* end = std::chrono::high_resolution_clock::now(); */
+    /* printf("Subcloud partitioning time: (%.4f ms)\n", */ 
+    /*     std::chrono::duration<double, std::milli>(end - start).count()); */
 
     // Try multiplane segmentation
     start = std::chrono::high_resolution_clock::now();
-    Regions regions = SegmentRegions(cloud_ptr);
+    Regions regions = SegmentRegions(*cloud_ptr);
     end = std::chrono::high_resolution_clock::now();
     cout << "Time to segment planar regions " << regions.size() << " planar regions: " 
         << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() 
         << " ms" << endl;
 
     // Find cube given the subcloud_indices
-    start = std::chrono::high_resolution_clock::now();
-    std::vector<PlaneSummary> plane_summs = FindPlanesInSubclouds(cloud_ptr, subcloud_indices);
-    end = std::chrono::high_resolution_clock::now();
-    printf("Finding planes in subclouds time: (%.4f ms)\n", 
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+    /* start = std::chrono::high_resolution_clock::now(); */
+    /* std::vector<PlaneSummary> plane_summs = FindPlanesInSubclouds(cloud_ptr, subcloud_indices); */
+    /* end = std::chrono::high_resolution_clock::now(); */
+    /* printf("Finding planes in subclouds time: (%.4f ms)\n", */ 
+    /*     std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()); */
 
     start = std::chrono::high_resolution_clock::now();
-    Tuple3 triplet = FindOrthoPlaneTriplet(plane_summs);
+    try
+    {
+      Tuple3 triplet = FindOrthoPlaneTriplet(regions);
 
-    std::clog << "Rendering cube" << std::endl;
-    CubeParams params = EstimateCubeParams(triplet, plane_summs);
+      std::clog << "Rendering cube" << std::endl;
+      CubeParams params = EstimateCubeParams(triplet, regions);
 
-    renderer.camera_position({0, 0, 100});
-    renderer.scale({5.397, 5.397, 5.397});
+      renderer.camera_position(Eigen::Vector3f{0, 0, 0.01});
+      renderer.scale(Eigen::Vector3f{5.397, 5.397, 5.397});
 
-    // Copy subclouds and plane summaries used in the cube
-    std::array<GLfloat, 16> rotation;
-    for (int col = 0; col < 4; col++)
-      for (int row = 0; row < 4; row++)
-        rotation.at(col * 4 + row) = params.rotation(row, col);
-    renderer.rotation(rotation);
+      renderer.rotation(params.rotation);
 
-    float x = params.translation(0), y = params.translation(1), z = params.translation(2);
-    float za = zcm(z);
-    float xa = xcm(x, za), ya = ycm(y, za);
-    renderer.translation({xa, ya, za});
-    renderer();
-    end = std::chrono::high_resolution_clock::now();
-    printf("Cube parameter estimation time: (%.4f ms)\n", 
-        std::chrono::duration<double, std::milli>(end - start).count());
+      float x = params.translation(0), y = params.translation(1), z = params.translation(2);
+      float za = zcm(z);
+      float xa = xcm(x, za), ya = ycm(y, za);
+      std::clog << x << " " << y << " " << z << std::endl;
+      std::clog << xa << " " << ya << " " << za << std::endl;
+      renderer.translation(Eigen::Vector3f{0, 0, -za});
+      end = std::chrono::high_resolution_clock::now();
+      printf("Cube parameter estimation time: (%.4f ms)\n", 
+          std::chrono::duration<double, std::milli>(end - start).count());
+    }
+    catch (const std::length_error& e)
+    {
+      std::clog << "[EXCE] Less than three planes found!" << std::endl;
+    }
   }
 }
 
