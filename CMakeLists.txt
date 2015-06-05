@@ -60,12 +60,13 @@ include(${VTK_USE_FILE})
 #  message(STATUS "${_variableName}=${${_variableName}}")
 # endforeach()
 
-# Use OpenGL, GLU 
+# Use OpenGL, GLU, GLEW
 find_package(OpenGL REQUIRED)
 find_package(GLU REQUIRED)
-include_directories(${OPENGL_INCLUDE_DIRS} ${GLU_INCLUDE_DIRS})
-link_directories(${OPENGL_LIBRARY_DIRS} ${GLU_LIBRARY_DIRS})
-add_definitions(${OPENGL_DEFINITIONS} ${GLU_DEFINITIONS})
+pkg_check_modules(GLEW glew)
+include_directories(${OPENGL_INCLUDE_DIRS} ${GLEW_INCLUDE_DIRS} ${GLU_INCLUDE_DIRS})
+link_directories(${OPENGL_LIBRARY_DIRS} ${GLEW_LIBRARY_DIRS} ${GLU_LIBRARY_DIRS})
+add_definitions(${OPENGL_DEFINITIONS} ${GLEW_DEFINITIONS} ${GLU_DEFINITIONS})
 
 pkg_check_modules(GLFW glfw3)
 
@@ -76,6 +77,7 @@ message("${FREENECT_INCLUDE_DIRS}")
 set(RENDERER_LIBRARIES
   ${OPENGL_LIBRARIES}
   ${GLU_LIBRARIES}
+  ${GLEW_LIBRARIES}
   ${GLFW_STATIC_LIBRARIES}
   )
 
@@ -88,7 +90,7 @@ set(LIBRARIES
   m
   pthread)
 
-include_directories("include")
+include_directories(include)
 add_definitions(-std=c++11) 
 
 add_library(ransac_cube src/ransac_cube.cpp src/utility.cpp)

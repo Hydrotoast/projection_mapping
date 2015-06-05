@@ -146,8 +146,8 @@ EstimateCubeParams(const Tuple3& triplet, Regions& regions)
   }
 
   // Solve for corner in system
-  Eigen::FullPivHouseholderQR<Eigen::Matrix3f> QR{A};
-  params.translation = QR.solve(-b);
+  /* Eigen::FullPivHouseholderQR<Eigen::Matrix3f> QR{A}; */
+  params.translation = A.transpose() * -b;
 
   // Construct rotation from normals
   params.rotation.setIdentity(4, 4);

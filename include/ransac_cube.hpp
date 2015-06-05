@@ -30,8 +30,8 @@ typedef struct CubeParams
 
 
 // Window parameters
-extern int WINDOW_WIDTH;
-extern int WINDOW_HEIGHT;
+extern unsigned int WINDOW_WIDTH;
+extern unsigned int WINDOW_HEIGHT;
 
 // Depth calibration
 extern float k1;

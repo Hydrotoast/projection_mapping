@@ -1,5 +1,13 @@
-#include "drawable.hpp"
-#include "renderer.hpp"
+#include "glfw_renderer/camera_builder.hpp"
+
+#include "glfw_renderer/gl_engine.hpp"
+#include "glfw_renderer/renderer.hpp"
+
+#include "glfw_renderer/loader.hpp"
+
+#include "glfw_renderer/shape_factory.hpp"
+#include "glfw_renderer/scenegraph.hpp"
+
 #include "ransac_cube.hpp"
 #include "utility.hpp"
 #include "buffers.h"
@@ -64,14 +72,32 @@ uint8_t *freenect_rgb_buffer, *rgb_front;
 /**
  * OpenGL state
  **/
-int WINDOW_WIDTH = 640;
-int WINDOW_HEIGHT = 480;
-Renderer<Cube> renderer{WINDOW_WIDTH, WINDOW_HEIGHT};
+unsigned int WINDOW_WIDTH = 640;
+unsigned int WINDOW_HEIGHT = 480;
+Renderer<GLEngine> renderer{WINDOW_WIDTH, WINDOW_HEIGHT};
+Scenegraph<GLEngine, Cube::N> scene;
 
 /**
  * PCL State
  **/
 pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ptr;
+
+void draw_with_renderer(const CubeParams& params)
+{
+  Eigen::Matrix4f scale;
+  scale <<
+      10.16, 0,    0,    0,
+      0,   10.16,  0,    0,
+      0,   0,   10.16,   0,
+      0,   0,   0,    1;
+  std::clog << "Offset: " << params.translation << std::endl;
+  Eigen::Matrix4f transformation = params.rotation * scale;
+  Eigen::Vector3f true_translation{params.translation(0), 
+      params.translation(1), -params.translation(2)};
+  transformation.block<3,1>(0,3) = true_translation;
+  scene.geode().transformation(transformation);
+  std::clog << "Rendering cube" << std::endl;
+}
 
 void pcl_runner() {
   while (true) {
@@ -82,9 +108,17 @@ void pcl_runner() {
     for (int col = 0; col < WINDOW_WIDTH; col++) {
       for (int row = 0; row < WINDOW_HEIGHT; row++) {
         int cell = row * WINDOW_WIDTH + col;
-        cloud_ptr->points[cell].x = col;
-        cloud_ptr->points[cell].y = row;
-        cloud_ptr->points[cell].z = pcl_front[cell];
+
+        float x = col;
+        float y = row;
+        float z = pcl_front[cell];
+
+        float za = zcm(z);
+        float xa = xcm(x, za), ya = ycm(y, za);
+
+        cloud_ptr->points[cell].x = xa;
+        cloud_ptr->points[cell].y = ya;
+        cloud_ptr->points[cell].z = za;
       }
     }
     auto end = std::chrono::high_resolution_clock::now();
@@ -122,17 +156,14 @@ void pcl_runner() {
       std::clog << "Rendering cube" << std::endl;
       CubeParams params = EstimateCubeParams(triplet, regions);
 
-      renderer.camera_position(Eigen::Vector3f{0, 0, 0.01});
-      renderer.scale(Eigen::Vector3f{5.397, 5.397, 5.397});
+      draw_with_renderer(params);
 
-      renderer.rotation(params.rotation);
-
-      float x = params.translation(0), y = params.translation(1), z = params.translation(2);
-      float za = zcm(z);
-      float xa = xcm(x, za), ya = ycm(y, za);
-      std::clog << x << " " << y << " " << z << std::endl;
-      std::clog << xa << " " << ya << " " << za << std::endl;
-      renderer.translation(Eigen::Vector3f{0, 0, -za});
+      /* float x = params.translation(0), y = params.translation(1), z = params.translation(2); */
+      /* float za = zcm(z); */
+      /* float xa = xcm(x, za), ya = ycm(y, za); */
+      /* std::clog << x << " " << y << " " << z << std::endl; */
+      /* std::clog << xa << " " << ya << " " << za << std::endl; */
+      /* renderer.translation(Eigen::Vector3f{0, 0, -za}); */
       end = std::chrono::high_resolution_clock::now();
       printf("Cube parameter estimation time: (%.4f ms)\n", 
           std::chrono::duration<double, std::milli>(end - start).count());
@@ -245,8 +276,37 @@ int main(int argc, char *argv[]) {
   std::thread freenect_thread(freenect_runner);
   std::thread pcl_thread(pcl_runner);
 
-  // Run the renderer
-  renderer();
+  // Load the shaders
+  ShaderProgramFileLoader<GLEngine, FileLoader> loader;
+  ShaderProgram<GLEngine> program = loader.load("shader.vert", "shader.frag");
+  program();
+
+  // Load the resolvers
+  AttributeResolver<GLEngine> attribute_resolver{program};
+  UniformResolver<GLEngine> uniform_resolver{program};
+  renderer.uniform_resolver(uniform_resolver);
+
+  // Load the geode
+  auto shape_ptr = std::move(ShapeFactory<GLEngine, Cube>{program});
+  auto geode = std::unique_ptr<Geode<GLEngine, Cube::N>>{
+      new Geode<GLEngine, Cube::N>{std::move(shape_ptr)}};
+  scene.geode(std::move(geode));
+
+  // Load the default camera
+  CameraBuilder<GLEngine> camera_builder{0.61, -400};
+  camera_builder.add_persp_matrix();
+  camera_builder.add_ndc_matrix(10, 10);
+  scene.camera(std::move(camera_builder));
+
+  Eigen::Matrix4f view_translation;
+  view_translation <<
+      1, 0, 0, 0,
+      0, -1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1;
+  scene.camera().view(view_translation);
+
+  renderer(scene);
 
   freenect_thread.join();
   pcl_thread.join();

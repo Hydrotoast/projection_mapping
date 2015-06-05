@@ -1,7 +1,14 @@
-#include "drawable.hpp"
-#include "renderer.hpp"
 #include "ransac_cube.hpp"
 #include "utility.hpp"
+#include "glfw_renderer/camera_builder.hpp"
+
+#include "glfw_renderer/gl_engine.hpp"
+#include "glfw_renderer/renderer.hpp"
+
+#include "glfw_renderer/loader.hpp"
+
+#include "glfw_renderer/shape_factory.hpp"
+#include "glfw_renderer/scenegraph.hpp"
 
 #include <iostream>
 #include <pcl/console/parse.h>
@@ -33,8 +40,6 @@ using namespace std;
 
 using Viewer = pcl::visualization::PCLVisualizer;
 using ViewerPtr = std::shared_ptr<Viewer>;
-
-Renderer<Cube> renderer{640, 480};
 
 static bool running;
 
@@ -178,15 +183,53 @@ DisplayCube(Tuple3 triplet, Regions& regions)
 {
   CubeParams params = EstimateCubeParams(triplet, regions);
 
+  Renderer<GLEngine> renderer{640, 480};
+  ShaderProgramFileLoader<GLEngine, FileLoader> loader;
+  ShaderProgram<GLEngine> program = loader.load("shader.vert", "shader.frag");
+  program();
+
+  AttributeResolver<GLEngine> attribute_resolver{program};
+  UniformResolver<GLEngine> uniform_resolver{program};
+  renderer.uniform_resolver(uniform_resolver);
+
+  auto shape_ptr = std::move(ShapeFactory<GLEngine, Cube>{program});
+
+  CameraBuilder<GLEngine> camera_builder{0.61, -1000};
+  camera_builder.add_persp_matrix();
+  camera_builder.add_ndc_matrix(0.42, 0.42);
+
+  std::unique_ptr<Camera> camera = std::move(camera_builder);
+
+  auto geode = std::unique_ptr<Geode<GLEngine, Cube::N>>{
+      new Geode<GLEngine, Cube::N>{std::move(shape_ptr)}};
+
+  Scenegraph<GLEngine, Cube::N> scene;
+
+  Eigen::Matrix4f view_translation;
+  view_translation <<
+      1, 0, 0, 0,
+      0, -1, 0, 0,
+      0, 0, 1, -60,
+      0, 0, 0, 1;
+  camera->view(view_translation);
+  
+  Eigen::Matrix4f scale;
+  scale <<
+      10.16, 0,    0,    0,
+      0,   10.16,  0,    0,
+      0,   0,   10.16,   0,
+      0,   0,   0,    1;
+  Eigen::Matrix4f transformation = params.rotation * scale;
+  /* transformation.block<3, 1>(0, 3) = Eigen::Vector3f{ */
+  /*     params.translation(0), params.translation(1), -params.translation(2)}; */
+  geode->transformation(transformation);
+
+  scene.camera(std::move(camera));
+  scene.geode(std::move(geode));
+
   std::clog << "Rendering cube" << std::endl;
-  renderer.camera_position({0, 0, 100});
-  renderer.scale({5.397, 5.397, 5.397});
-  renderer.rotation(params.rotation);
-  float x = params.translation(0), y = params.translation(1), z = params.translation(2);
-  float za = zcm(z);
-  float xa = xcm(x, za), ya = ycm(y, za);
-  renderer.translation({xa, ya, za});
-  renderer();
+
+  renderer(scene);
 }
 
 int main(int argc, char** argv)
